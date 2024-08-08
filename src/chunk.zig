@@ -33,10 +33,8 @@ fn next_capacity(self: *Self) u8 {
         return self.capacity * 2;
     }
 }
+// if capacity is 0 this will act as a free
 fn grow(self: *Self, prev_size: usize) []u8 {
-    if (self.capacity == 0) {
-        self.allocator.free(self.code);
-    }
     return mem.reallocate(self.allocator, self.code, prev_size, self.capacity);
 }
 pub const Op = enum {
