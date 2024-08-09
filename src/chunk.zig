@@ -99,6 +99,6 @@ test "grow" {
     var chunk: Self = undefined;
     defer chunk.free_chunk();
     chunk.init(std.testing.allocator);
-    chunk.write_chunk();
-    assert(chunk.capacity == 8 and chunk.count == 0 and chunk.code.len == 8);
+    chunk.write_chunk(@intFromEnum(Op.OP_CONSTANT));
+    assert(chunk.capacity == 8 and chunk.count == 1 and chunk.code.len == 8);
 }
