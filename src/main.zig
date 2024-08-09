@@ -8,10 +8,11 @@ pub fn main() !void {
     const gpa = _gpa.allocator();
     chunk.init(gpa);
     const constant = chunk.add_constant(1.2);
-    chunk.write_chunk(@intFromEnum(Op.OP_CONSTANT));
-    chunk.write_chunk(constant);
-    chunk.write_chunk(@intFromEnum(Op.OP_RETURN));
-    print("{any}\n", .{chunk.code});
+    const c: u8 = @truncate(constant);
+    chunk.write_chunk(@intFromEnum(Op.OP_CONSTANT), 369);
+    chunk.write_chunk(c, 369);
+    chunk.write_chunk(@intFromEnum(Op.OP_RETURN), 369);
+    chunk.write_constant(420, 369);
     chunk.disassemble_chunk("test chunk");
     _ = chunk.code;
 }

@@ -3,16 +3,16 @@ const Allocator = std.mem.Allocator;
 const mem = @import("memory.zig");
 const assert = std.debug.assert;
 const print = std.debug.print;
+const Size = @import("chunk.zig").Size;
 
 pub const Value = f32;
 pub fn print_value(value: Value) void {
     print("{d}", .{value});
 }
-
 // maybe create an interface with this and chunk ?
 pub const ValueArray = struct {
-    capacity: u8,
-    count: u8,
+    capacity: Size,
+    count: Size,
     values: []Value,
     allocator: Allocator,
     const Self = @This();
@@ -29,19 +29,18 @@ pub const ValueArray = struct {
         self.count += 1;
     }
     pub fn free_value_array(self: *Self) void {
-        _ = mem.reallocate(self.allocator, self.values, self.capacity, 0);
+        mem.free(self.allocator, self.values);
         self.init(self.allocator);
     }
-    fn next_capacity(self: *Self) u8 {
+    fn next_capacity(self: *Self) Size {
         if (self.capacity < 8) {
             return 8;
         } else {
-            // TODO: check this?
             return self.capacity * 2;
         }
     }
     // if capacity is 0 this will act as a free
-    fn grow(self: *Self, prev_size: usize) []f32 {
+    fn grow(self: *Self, prev_size: usize) []Value {
         return mem.reallocate(self.allocator, self.values, prev_size, self.capacity);
     }
 };
