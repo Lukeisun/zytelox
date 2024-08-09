@@ -1,12 +1,18 @@
 const std = @import("std");
 const Chunk = @import("chunk.zig");
+const Op = @import("chunk.zig").Op;
 const print = std.debug.print;
 pub fn main() !void {
     var chunk: Chunk = undefined;
     var _gpa = std.heap.GeneralPurposeAllocator(.{}){};
     const gpa = _gpa.allocator();
     chunk.init(gpa);
+    const constant = chunk.add_constant(1.2);
+    chunk.write_chunk(@intFromEnum(Op.OP_CONSTANT));
+    chunk.write_chunk(constant);
+    chunk.write_chunk(@intFromEnum(Op.OP_RETURN));
     print("{any}\n", .{chunk.code});
+    chunk.disassemble_chunk("test chunk");
     _ = chunk.code;
 }
 
