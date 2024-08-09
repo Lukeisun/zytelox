@@ -45,9 +45,9 @@ pub fn write_constant(self: *Self, value: Value, line: u16) void {
     self.write_chunk(@intFromEnum(Op.OP_CONSTANT_LONG), line);
     _ = self.add_constant(value);
     const constant = 16_777_216 - 1;
-    const lower_bits: u8 = constant & (0xFF);
-    const middle_bits: u8 = (constant & (0xFF << 8)) >> 8;
-    const high_bits: u8 = (constant & (0xFF << 16)) >> 16;
+    const lower_bits: u8 = @truncate(constant);
+    const middle_bits: u8 = @truncate(constant >> 8);
+    const high_bits: u8 = @truncate(constant >> 16);
     var x: u24 = lower_bits;
     x += @as(u24, middle_bits) << 8;
     x += @as(u24, high_bits) << 16;
