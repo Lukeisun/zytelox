@@ -43,11 +43,10 @@ pub fn write_chunk(self: *Self, byte: u8, line: u16) void {
 // Challenge 2 Part 14
 pub fn write_constant(self: *Self, value: Value, line: u16) void {
     self.write_chunk(@intFromEnum(Op.OP_CONSTANT_LONG), line);
-    _ = self.add_constant(value);
-    const constant = 16_777_216 - 1;
+    const constant = self.add_constant(value);
     const bits = [_]u8{ @truncate(constant), @truncate(constant >> 8), @truncate(constant >> 16) };
     for (bits) |bit| {
-        self.write_chunk(@intFromEnum(Op.OP_CONSTANT_LONG), bit);
+        self.write_chunk(bit, line);
     }
 }
 pub fn add_constant(self: *Self, value: Value) Size {
@@ -96,9 +95,7 @@ pub fn disassemble_instruction(self: *Self, offset: Size) Size {
     switch (instruction) {
         .OP_RETURN => |i| return self.simple_instruction(@tagName(i), offset),
         .OP_CONSTANT => |i| return self.constant_instruction(@tagName(i), offset),
-        // .OP_CONSTANT_LONG => |i| return self.constant_instruction(@tagName(i), offset),
-        .OP_CONSTANT_LONG => return offset + 1,
-        // else => unreachable,
+        .OP_CONSTANT_LONG => |i| return self.constant_long_instruction(@tagName(i), offset),
     }
 }
 pub fn simple_instruction(_: *Self, tag_name: []const u8, offset: Size) Size {
@@ -111,6 +108,15 @@ pub fn constant_instruction(self: *Self, tag_name: []const u8, offset: Size) Siz
     print_value(self.constants.values[constant]);
     print("'\n", .{});
     return offset + 2;
+}
+pub fn constant_long_instruction(self: *Self, tag_name: []const u8, offset: Size) Size {
+    const constant: u24 = self.code[offset + 1] +
+        (@as(u24, self.code[offset + 2]) << 8) +
+        (@as(u24, self.code[offset + 3]) << 16);
+    print("{s: <16} {d:>4} '", .{ tag_name, constant });
+    print_value(self.constants.values[constant]);
+    print("'\n", .{});
+    return offset + 4;
 }
 pub const Op = enum(u8) {
     OP_RETURN,
