@@ -64,8 +64,8 @@ fn next_capacity(self: *Self) Size {
     if (self.capacity < 8) {
         return 8;
     } else {
-        // TODO: check this?
-        return self.capacity * 2;
+        const res = @mulWithOverflow(self.capacity, 2);
+        if (res[1] == 1) return std.math.maxInt(Size) else return res[0];
     }
 }
 // if capacity is 0 this will act as a free
@@ -137,4 +137,16 @@ test "grow" {
     chunk.write_chunk(@intFromEnum(Op.OP_CONSTANT), 0);
     assert(chunk.capacity == 8 and chunk.count == 1 and chunk.code.len == 8);
     assert(chunk.lines.len == 8);
+}
+test "max constants" {
+    var chunk: Self = undefined;
+    defer chunk.free_chunk();
+    chunk.init(std.testing.allocator);
+    var i: Size = 0;
+    while (i < 16777215 / 4) : (i += 1) {
+        chunk.write_constant(69, 0);
+    }
+    const max = std.math.maxInt(Size);
+    assert(chunk.capacity == max);
+    assert(max >= chunk.count and chunk.count >= max - 4);
 }

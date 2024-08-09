@@ -12,7 +12,7 @@ pub fn main() !void {
     chunk.write_chunk(@intFromEnum(Op.OP_CONSTANT), 369);
     chunk.write_chunk(c, 369);
     chunk.write_chunk(@intFromEnum(Op.OP_RETURN), 369);
-    chunk.write_constant(420, 369);
+    chunk.write_constant(1677721561, 369);
     chunk.disassemble_chunk("test chunk");
     _ = chunk.code;
 }
