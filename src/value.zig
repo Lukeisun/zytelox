@@ -12,6 +12,12 @@ pub fn print_value(value: Value) void {
         .null => {},
     }
 }
+pub fn print_value_writer(value: Value, writer: std.io.AnyWriter) !void {
+    switch (value) {
+        .float => |f| try writer.print("{d}", .{f}),
+        .null => {},
+    }
+}
 // maybe create an interface with this and chunk ?
 pub const ValueArray = struct {
     capacity: Size,

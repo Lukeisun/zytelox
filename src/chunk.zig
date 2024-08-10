@@ -42,11 +42,20 @@ pub fn write_chunk(self: *Self, byte: u8, line: u16) void {
 }
 // Challenge 2 Part 14
 pub fn write_constant(self: *Self, value: Value, line: u16) void {
-    self.write_chunk(@intFromEnum(Op.OP_CONSTANT_LONG), line);
+    const op = if (self.constants.count > std.math.maxInt(u8)) Op.CONSTANT_LONG else Op.CONSTANT;
+    self.write_chunk(@intFromEnum(op), line);
     const constant = self.add_constant(value);
-    const bits = [_]u8{ @truncate(constant), @truncate(constant >> 8), @truncate(constant >> 16) };
-    for (bits) |bit| {
-        self.write_chunk(bit, line);
+    switch (op) {
+        .CONSTANT => {
+            self.write_chunk(@truncate(constant), line);
+        },
+        .CONSTANT_LONG => {
+            const bits = [_]u8{ @truncate(constant), @truncate(constant >> 8), @truncate(constant >> 16) };
+            for (bits) |bit| {
+                self.write_chunk(bit, line);
+            }
+        },
+        else => unreachable,
     }
 }
 pub fn add_constant(self: *Self, value: Value) Size {
@@ -93,9 +102,11 @@ pub fn disassemble_instruction(self: *Self, offset: Size) Size {
     }
     const instruction: Op = @enumFromInt(self.code[offset]);
     switch (instruction) {
-        .OP_RETURN => |i| return self.simple_instruction(@tagName(i), offset),
-        .OP_CONSTANT => |i| return self.constant_instruction(@tagName(i), offset),
-        .OP_CONSTANT_LONG => |i| return self.constant_long_instruction(@tagName(i), offset),
+        .RETURN => |i| return self.simple_instruction(@tagName(i), offset),
+        .CONSTANT => |i| return self.constant_instruction(@tagName(i), offset),
+        .CONSTANT_LONG => |i| return self.constant_long_instruction(@tagName(i), offset),
+        .NEGATE => |i| return self.simple_instruction(@tagName(i), offset),
+        .ADD, .SUBTRACT, .MULTIPLY, .DIVIDE => |i| return self.simple_instruction(@tagName(i), offset),
     }
 }
 pub fn simple_instruction(_: *Self, tag_name: []const u8, offset: Size) Size {
@@ -120,9 +131,14 @@ pub fn constant_long_instruction(self: *Self, tag_name: []const u8, offset: Size
     return offset + 4;
 }
 pub const Op = enum(u8) {
-    OP_RETURN,
-    OP_CONSTANT,
-    OP_CONSTANT_LONG,
+    RETURN,
+    CONSTANT,
+    CONSTANT_LONG,
+    NEGATE,
+    ADD,
+    SUBTRACT,
+    MULTIPLY,
+    DIVIDE,
 };
 
 test "init" {
@@ -135,7 +151,7 @@ test "grow" {
     var chunk: Self = undefined;
     defer chunk.free_chunk();
     chunk.init(std.testing.allocator);
-    chunk.write_chunk(@intFromEnum(Op.OP_CONSTANT), 0);
+    chunk.write_chunk(@intFromEnum(Op.CONSTANT), 0);
     assert(chunk.capacity == 8 and chunk.count == 1 and chunk.code.len == 8);
     assert(chunk.lines.len == 8);
 }
