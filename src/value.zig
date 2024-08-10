@@ -62,6 +62,6 @@ test "grow" {
     var value_array: ValueArray = undefined;
     defer value_array.free_value_array();
     value_array.init(std.testing.allocator);
-    value_array.write_value_array(32);
+    value_array.write_value_array(.{ .float = 32 });
     assert(value_array.capacity == 8 and value_array.count == 1 and value_array.values.len == 8);
 }

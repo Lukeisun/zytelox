@@ -42,7 +42,7 @@ pub fn push(self: *Self, value: Value) void {
 }
 pub fn pop(self: *Self) Value {
     // TODO: probably remove this? tbh it really only effects debug so maybe only in debug
-    self.stack_top[0] = .null;
+    // self.stack_top[0] = .null;
     self.stack_top -= 1;
     return self.stack_top[0];
 }
@@ -83,11 +83,15 @@ pub fn run(self: *Self) !Result {
                 self.push(constant);
             },
             .NEGATE => {
-                const constant = self.pop();
-                switch (constant) {
-                    .float => |f| self.push(Value{ .float = -f }),
-                    else => unreachable,
-                }
+                // no pop push
+                const prev = self.stack_top - 1;
+                prev[0].float *= -1;
+                // pop push
+                // const constant = self.pop();
+                // switch (constant) {
+                //     .float => |f| self.push(Value{ .float = -f }),
+                //     else => unreachable,
+                // }
             },
             .ADD, .SUBTRACT, .MULTIPLY, .DIVIDE => |op| self.binary_op(op),
             // else => unreachable,
