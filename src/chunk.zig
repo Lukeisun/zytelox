@@ -110,7 +110,8 @@ pub fn constant_instruction(self: *Self, tag_name: []const u8, offset: Size) Siz
     return offset + 2;
 }
 pub fn constant_long_instruction(self: *Self, tag_name: []const u8, offset: Size) Size {
-    const constant: u24 = self.code[offset + 1] +
+    const constant: u24 =
+        self.code[offset + 1] +
         (@as(u24, self.code[offset + 2]) << 8) +
         (@as(u24, self.code[offset + 3]) << 16);
     print("{s: <16} {d:>4} '", .{ tag_name, constant });

@@ -21,14 +21,11 @@ pub fn main() !void {
     const c: u8 = @truncate(constant);
     chunk.write_chunk(@intFromEnum(Op.OP_CONSTANT), 369);
     chunk.write_chunk(c, 369);
-    chunk.write_chunk(@intFromEnum(Op.OP_RETURN), 369);
     chunk.write_constant(.{ .float = 420 }, 369);
-    // chunk.disassemble_chunk("test chunk");
+    chunk.write_chunk(@intFromEnum(Op.OP_RETURN), 369);
+    chunk.disassemble_chunk("test chunk");
     _ = vm.interpret(&chunk);
     _ = chunk.code;
-    vm.push(.{ .float = 69 });
-    vm.push(.{ .float = 128 });
-    print_value(vm.pop());
 }
 
 test "simple test" {
