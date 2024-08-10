@@ -5,9 +5,12 @@ const assert = std.debug.assert;
 const print = std.debug.print;
 const Size = @import("chunk.zig").Size;
 
-pub const Value = f32;
+pub const Value = union(enum) { float: f32, null };
 pub fn print_value(value: Value) void {
-    print("{d}", .{value});
+    switch (value) {
+        .float => |f| print("{d}", .{f}),
+        .null => {},
+    }
 }
 // maybe create an interface with this and chunk ?
 pub const ValueArray = struct {
