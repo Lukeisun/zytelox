@@ -25,8 +25,8 @@ pub const ValueArray = struct {
     values: []Value,
     allocator: Allocator,
     const Self = @This();
-    pub fn init(self: *Self, allocator: Allocator) void {
-        self.* = Self{ .count = 0, .capacity = 0, .values = &[_]Value{}, .allocator = allocator };
+    pub fn init(allocator: Allocator) Self {
+        return Self{ .count = 0, .capacity = 0, .values = &[_]Value{}, .allocator = allocator };
     }
     pub fn write_value_array(self: *Self, value: Value) void {
         if (self.capacity < self.count + 1) {
@@ -39,7 +39,7 @@ pub const ValueArray = struct {
     }
     pub fn free_value_array(self: *Self) void {
         mem.free(self.allocator, self.values);
-        self.init(self.allocator);
+        // self.init(self.allocator);
     }
     fn next_capacity(self: *Self) Size {
         if (self.capacity < 8) {

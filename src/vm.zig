@@ -3,7 +3,9 @@ const Chunk = @import("chunk.zig");
 const Op = Chunk.Op;
 const Value = @import("value.zig").Value;
 const Size = @import("chunk.zig").Size;
+const Allocator = std.mem.Allocator;
 const dbg = @import("main.zig").dbg;
+const compile = @import("compiler.zig").compile;
 const print_value_writer = @import("value.zig").print_value_writer;
 const print_value = @import("value.zig").print_value;
 const print = std.debug.print;
@@ -17,20 +19,32 @@ ip: [*]u8,
 stack: [STACK_MAX]Value,
 stack_top: [*]Value,
 writer: std.io.AnyWriter,
+allocator: Allocator,
 const Result = enum {
     INTERPRET_OK,
     INTERPRET_COMPILE_ERROR,
     INTERPRET_RUNTIME_ERROR,
 };
 
-pub fn init(self: *Self, writer: std.io.AnyWriter) void {
-    self.chunk = null;
-    self.writer = writer;
-    self.ip = &[_]u8{};
-    self.reset_stack();
+pub fn init(allocator: Allocator, writer: std.io.AnyWriter) *Self {
+    const vm_ptr = allocator.create(Self) catch {
+        panic("OOM", .{});
+    };
+    vm_ptr.* = Self{
+        .chunk = null,
+        .writer = writer,
+        .ip = &[_]u8{},
+        .stack = undefined,
+        .stack_top = undefined,
+        .allocator = allocator,
+    };
+    vm_ptr.reset_stack();
+    return vm_ptr;
 }
-pub fn deinit(_: *Self) void {
+pub fn deinit(self: *Self) void {
+    self.allocator.destroy(self);
     // print("{any}", .{self});
+
 }
 fn reset_stack(self: *Self) void {
     self.stack = .{.null} ** STACK_MAX;
@@ -41,15 +55,20 @@ pub fn push(self: *Self, value: Value) void {
     self.stack_top += 1;
 }
 pub fn pop(self: *Self) Value {
-    // TODO: probably remove this? tbh it really only effects debug so maybe only in debug
-    // self.stack_top[0] = .null;
     self.stack_top -= 1;
+    // TODO: probably remove this? tbh it really only effects debug so maybe only in debug
+    self.stack_top[0] = .null;
     return self.stack_top[0];
 }
 
-pub fn interpret(self: *Self, chunk: *Chunk) !Result {
-    self.chunk = chunk;
-    self.ip = chunk.code.ptr;
+pub fn interpret(self: *Self, allocator: Allocator, source: [:0]const u8) !Result {
+    var chunk = Chunk.create(allocator);
+    defer chunk.free_chunk();
+    if (!compile(source, &chunk)) {
+        return Result.INTERPRET_COMPILE_ERROR;
+    }
+    self.chunk = &chunk;
+    self.ip = self.chunk.?.code.ptr;
     return self.run();
 }
 
@@ -70,8 +89,14 @@ pub fn run(self: *Self) !Result {
         const instruction: Op = @enumFromInt(self.read_byte());
         switch (instruction) {
             .RETURN => {
-                try print_value_writer(self.pop(), self.writer);
+                const value = self.pop();
+                try print_value_writer(value, self.writer);
                 try self.writer.print("\n", .{});
+                for (self.stack) |v| {
+                    print("[ ", .{});
+                    print_value(v);
+                    print(" ]", .{});
+                }
                 return Result.INTERPRET_OK;
             },
             .CONSTANT => {

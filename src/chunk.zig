@@ -4,6 +4,7 @@ const Value = @import("value.zig").Value;
 const ValueArray = @import("value.zig").ValueArray;
 const print_value = @import("value.zig").print_value;
 const Allocator = std.mem.Allocator;
+const panic = std.debug.panic;
 const assert = std.debug.assert;
 const print = std.debug.print;
 
@@ -17,10 +18,9 @@ capacity: Size,
 constants: ValueArray,
 allocator: Allocator,
 
-pub fn init(self: *Self, allocator: Allocator) void {
-    var constants: ValueArray = undefined;
-    constants.init(allocator);
-    self.* = Self{
+pub fn create(allocator: Allocator) Self {
+    const constants = ValueArray.init(allocator);
+    return Self{
         .count = 0,
         .capacity = 0,
         .code = &[_]u8{},
@@ -42,7 +42,9 @@ pub fn write_chunk(self: *Self, byte: u8, line: u16) void {
 }
 // Challenge 2 Part 14
 pub fn write_constant(self: *Self, value: Value, line: u16) void {
-    const op = if (self.constants.count > std.math.maxInt(u8)) Op.CONSTANT_LONG else Op.CONSTANT;
+    const count = self.constants.count;
+    if (count > std.math.maxInt(Size)) panic("Too many constants in one chunk", .{});
+    const op = if (count > std.math.maxInt(u8)) Op.CONSTANT_LONG else Op.CONSTANT;
     self.write_chunk(@intFromEnum(op), line);
     const constant = self.add_constant(value);
     switch (op) {
@@ -67,7 +69,7 @@ pub fn free_chunk(self: *Self) void {
     mem.free(self.allocator, self.lines);
     self.constants.free_value_array();
     // TODO: maybe just zero it out manually
-    self.init(self.allocator);
+    // self.create(self.allocator);
 }
 fn next_capacity(self: *Self) Size {
     if (self.capacity < 8) {
@@ -142,15 +144,14 @@ pub const Op = enum(u8) {
 };
 
 test "init" {
-    var chunk: Self = undefined;
-    chunk.init(std.testing.allocator);
+    const chunk = Self.create(std.testing.allocator);
+    defer chunk.free_chunk();
     assert(chunk.capacity == 0 and chunk.count == 0 and chunk.code.len == 0);
     assert(chunk.lines.len == 0);
 }
 test "grow" {
-    var chunk: Self = undefined;
+    const chunk = Self.create(std.testing.allocator);
     defer chunk.free_chunk();
-    chunk.init(std.testing.allocator);
     chunk.write_chunk(@intFromEnum(Op.CONSTANT), 0);
     assert(chunk.capacity == 8 and chunk.count == 1 and chunk.code.len == 8);
     assert(chunk.lines.len == 8);
@@ -159,9 +160,8 @@ test "grow" {
 // once we go past u8
 // reevaluate this test
 test "max constants" {
-    var chunk: Self = undefined;
+    const chunk = Self.create(std.testing.allocator);
     defer chunk.free_chunk();
-    chunk.init(std.testing.allocator);
     var i: Size = 0;
     while (i < 16777215 / 4) : (i += 1) {
         chunk.write_constant(.{ .float = 69 }, 0);
