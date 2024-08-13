@@ -5,17 +5,19 @@ const assert = std.debug.assert;
 const print = std.debug.print;
 const Size = @import("chunk.zig").Size;
 
-pub const Value = union(enum) { float: f32, null };
+pub const Value = union(enum) { float: f32, boolean: bool, nil };
 pub fn print_value(value: Value) void {
     switch (value) {
         .float => |f| print("{d}", .{f}),
-        .null => {},
+        .boolean => |b| print("{}", .{b}),
+        .nil => {},
     }
 }
 pub fn print_value_writer(value: Value, writer: std.io.AnyWriter) !void {
     switch (value) {
         .float => |f| try writer.print("{d}", .{f}),
-        .null => {},
+        .boolean => |b| try writer.print("{}", .{b}),
+        .nil => {},
     }
 }
 // maybe create an interface with this and chunk ?

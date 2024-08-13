@@ -47,7 +47,7 @@ pub fn deinit(self: *Self) void {
 
 }
 fn reset_stack(self: *Self) void {
-    self.stack = .{.null} ** STACK_MAX;
+    self.stack = .{.nil} ** STACK_MAX;
     self.stack_top = self.stack[0..];
 }
 pub fn push(self: *Self, value: Value) void {
@@ -55,9 +55,9 @@ pub fn push(self: *Self, value: Value) void {
     self.stack_top += 1;
 }
 pub fn pop(self: *Self) Value {
-    self.stack_top -= 1;
     // TODO: probably remove this? tbh it really only effects debug so maybe only in debug
-    self.stack_top[0] = .null;
+    self.stack_top[0] = .nil;
+    self.stack_top -= 1;
     return self.stack_top[0];
 }
 
@@ -92,11 +92,6 @@ pub fn run(self: *Self) !Result {
                 const value = self.pop();
                 try print_value_writer(value, self.writer);
                 try self.writer.print("\n", .{});
-                for (self.stack) |v| {
-                    print("[ ", .{});
-                    print_value(v);
-                    print(" ]", .{});
-                }
                 return Result.INTERPRET_OK;
             },
             .CONSTANT => {
@@ -109,8 +104,12 @@ pub fn run(self: *Self) !Result {
             },
             .NEGATE => {
                 // no pop push
-                const prev = self.stack_top - 1;
-                prev[0].float *= -1;
+                var constant: [*]Value = (self.stack_top - 1);
+                if (constant[0] != .float) {
+                    self.runtime_error("Operand must be a number");
+                    return Result.INTERPRET_RUNTIME_ERROR;
+                }
+                constant[0].float *= -1;
                 // pop push
                 // const constant = self.pop();
                 // switch (constant) {
@@ -157,4 +156,9 @@ fn binary_op(self: *Self, op: Op) void {
         Op.DIVIDE => self.push(.{ .float = a.float / b.float }),
         else => unreachable,
     }
+}
+fn runtime_error(self: *Self, message: []const u8) void {
+    const line = self.chunk.?.lines[self.ip - self.chunk.?.code.ptr - 1];
+    std.log.err("[line {d}] in script\n\t{s}", .{ line, message });
+    self.reset_stack();
 }

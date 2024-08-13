@@ -78,9 +78,8 @@ fn binary(self: *Self) void {
     }
 }
 fn unary(self: *Self) void {
-    self.parse_precedence(Precedence.UNARY);
     const tag = self.parser.previous.tag;
-    self.expression();
+    self.parse_precedence(Precedence.UNARY);
     switch (tag) {
         TokenType.MINUS => self.emit_byte(@intFromEnum(Op.NEGATE)),
         else => unreachable,
