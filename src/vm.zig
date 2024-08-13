@@ -117,7 +117,11 @@ pub fn run(self: *Self) !Result {
                 //     else => unreachable,
                 // }
             },
+            .NIL => self.push(.{ .nil = {} }),
+            .FALSE => self.push(.{ .boolean = false }),
+            .TRUE => self.push(.{ .boolean = true }),
             .ADD, .SUBTRACT, .MULTIPLY, .DIVIDE => |op| self.binary_op(op),
+
             // else => unreachable,
         }
     }

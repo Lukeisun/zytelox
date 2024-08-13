@@ -10,14 +10,14 @@ pub fn print_value(value: Value) void {
     switch (value) {
         .float => |f| print("{d}", .{f}),
         .boolean => |b| print("{}", .{b}),
-        .nil => {},
+        .nil => print("nil", .{}),
     }
 }
 pub fn print_value_writer(value: Value, writer: std.io.AnyWriter) !void {
     switch (value) {
         .float => |f| try writer.print("{d}", .{f}),
         .boolean => |b| try writer.print("{}", .{b}),
-        .nil => {},
+        .nil => print("nil", .{}),
     }
 }
 // maybe create an interface with this and chunk ?

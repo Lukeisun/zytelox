@@ -64,7 +64,6 @@ fn expression(self: *Self) void {
 fn get_rule(_: *Self, tag: TokenType) ParseRule {
     return rules[@intFromEnum(tag)];
 }
-
 fn binary(self: *Self) void {
     const tag = self.parser.previous.tag;
     const rule = self.get_rule(tag);
@@ -94,6 +93,14 @@ fn number(self: *Self) void {
         panic("{s}", .{@errorName(err)});
     };
     self.emit_constant(.{ .float = value });
+}
+fn literal(self: *Self) void {
+    switch (self.parser.previous.tag) {
+        .FALSE => self.emit_byte(@intFromEnum(Op.FALSE)),
+        .TRUE => self.emit_byte(@intFromEnum(Op.TRUE)),
+        .NIL => self.emit_byte(@intFromEnum(Op.NIL)),
+        else => unreachable,
+    }
 }
 fn emit_constant(self: *Self, value: Value) void {
     self.current_chunk().write_constant(value, self.parser.previous.line);
@@ -158,7 +165,9 @@ const rules = blk: {
     r[@intFromEnum(t.SLASH)]       = .{ .prefix = null,     .infix = binary,   .precedence = Precedence.FACTOR };
     r[@intFromEnum(t.STAR)]        = .{ .prefix = null,     .infix = binary,   .precedence = Precedence.FACTOR };
     r[@intFromEnum(t.NUMBER)]      = .{ .prefix = number,   .infix = null,     .precedence = Precedence.NONE   };
-
+    r[@intFromEnum(t.FALSE)]       = .{ .prefix = literal,   .infix = null,     .precedence = Precedence.NONE  };
+    r[@intFromEnum(t.TRUE)]        = .{ .prefix = literal,   .infix = null,     .precedence = Precedence.NONE  };
+    r[@intFromEnum(t.NIL)]         = .{ .prefix = literal,   .infix = null,     .precedence = Precedence.NONE  };
     // zig fmt: on
     break :blk r;
 };
