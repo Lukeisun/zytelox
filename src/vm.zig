@@ -20,9 +20,7 @@ stack: [STACK_MAX]Value,
 stack_top: [*]Value,
 writer: std.io.AnyWriter,
 allocator: Allocator,
-// TODO: maybe just change this to error set
-const Result = enum {
-    INTERPRET_OK,
+pub const Result = error{
     INTERPRET_COMPILE_ERROR,
     INTERPRET_RUNTIME_ERROR,
 };
@@ -63,7 +61,7 @@ fn peek(self: *Self, dist: u8) Value {
     return (self.stack_top - (1 + dist))[0];
 }
 
-pub fn interpret(self: *Self, allocator: Allocator, source: [:0]const u8) !Result {
+pub fn interpret(self: *Self, allocator: Allocator, source: [:0]const u8) !void {
     var chunk = Chunk.create(allocator);
     defer chunk.free_chunk();
     if (!compile(allocator, source, &chunk)) {
@@ -74,7 +72,7 @@ pub fn interpret(self: *Self, allocator: Allocator, source: [:0]const u8) !Resul
     return self.run();
 }
 
-pub fn run(self: *Self) !Result {
+pub fn run(self: *Self) !void {
     while (true) {
         if (dbg) {
             //
@@ -94,7 +92,7 @@ pub fn run(self: *Self) !Result {
                 const value = self.pop();
                 try print_value_writer(value, self.writer);
                 try self.writer.print("\n", .{});
-                return Result.INTERPRET_OK;
+                return;
             },
             .CONSTANT => {
                 const constant = self.read_constant();
@@ -125,8 +123,7 @@ pub fn run(self: *Self) !Result {
                 }
                 switch (a) {
                     .float => {
-                        const res = self.binary_op(op);
-                        if (res == .INTERPRET_RUNTIME_ERROR) return res;
+                        try self.binary_op(op);
                     },
                     .object => {
                         if (a.object.tag != .string or b.object.tag != .string) {
@@ -140,10 +137,7 @@ pub fn run(self: *Self) !Result {
                     },
                 }
             },
-            .SUBTRACT, .MULTIPLY, .DIVIDE, .GREATER, .LESS => |op| {
-                const res = self.binary_op(op);
-                if (res == .INTERPRET_RUNTIME_ERROR) return res;
-            },
+            .SUBTRACT, .MULTIPLY, .DIVIDE, .GREATER, .LESS => |op| try self.binary_op(op),
             .EQUAL => {
                 const b = self.pop();
                 const a = self.pop();
@@ -180,7 +174,7 @@ fn read_constant_long(self: *Self) Value {
     }
     panic("CHUNK is NULL", .{});
 }
-fn binary_op(self: *Self, op: Op) Result {
+fn binary_op(self: *Self, op: Op) !void {
     const b = self.pop();
     const a = self.pop();
     if (b != .float or a != .float) {
@@ -198,7 +192,7 @@ fn binary_op(self: *Self, op: Op) Result {
         Op.LESS => self.push(.{ .boolean = a.float < b.float }),
         else => unreachable,
     }
-    return Result.INTERPRET_OK;
+    return;
 }
 fn runtime_error(self: *Self, message: []const u8) void {
     const line = self.chunk.?.lines[self.ip - self.chunk.?.code.ptr - 1];

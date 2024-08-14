@@ -3,6 +3,7 @@ const builtin = @import("builtin");
 const Chunk = @import("chunk.zig");
 const VM = @import("vm.zig");
 const Op = @import("chunk.zig").Op;
+const Result = VM.Result;
 const print_value = @import("value.zig").print_value;
 const print = std.debug.print;
 pub const dbg = (builtin.mode == std.builtin.OptimizeMode.Debug);
@@ -17,12 +18,13 @@ pub fn runFile(allocator: std.mem.Allocator, filename: [:0]const u8, vm: *VM) !v
     // const source = try file.readToEndAlloc(allocator, stat.size);
     const source = try file.readToEndAllocOptions(allocator, stat.size, null, @alignOf(u8), 0);
     std.debug.assert(source.len != 0);
-    const result = try vm.interpret(allocator, source);
-    switch (result) {
-        .INTERPRET_COMPILE_ERROR => std.process.exit(65),
-        .INTERPRET_RUNTIME_ERROR => std.process.exit(70),
-        else => {},
-    }
+    vm.interpret(allocator, source) catch |err| {
+        switch (err) {
+            Result.INTERPRET_COMPILE_ERROR => std.process.exit(65),
+            Result.INTERPRET_RUNTIME_ERROR => std.process.exit(70),
+            else => unreachable,
+        }
+    };
 }
 pub fn repl(allocator: std.mem.Allocator, vm: *VM) !void {
     const stdout = std.io.getStdOut().writer();

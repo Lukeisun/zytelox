@@ -35,6 +35,7 @@ pub const Object = struct {
         string,
     };
 };
+// Might need to have pointer back to object but I'm not sure
 pub const String = struct {
     chars: []u8,
     pub fn copy_string(allocator: Allocator, chars: []const u8) *Object {
