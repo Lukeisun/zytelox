@@ -4,7 +4,9 @@ const panic = std.debug.panic;
 const Value = @import("value.zig").Value;
 pub const Object = struct {
     const Self = @This();
-    tag: Tag,
+    tag: union(Tag) {
+        string: *String,
+    },
 
     // maybe wont need this
     pub fn is_string(value: Value) bool {
@@ -16,38 +18,37 @@ pub const Object = struct {
             else => false,
         };
     }
-    pub fn create(allocator: Allocator, tag: Tag) *Object {
+    pub fn create(allocator: Allocator, tag_data: anytype) *Object {
         errdefer {
             panic("OOM", .{});
         }
         const object = try allocator.create(Object);
-        object.* = .{ .tag = tag };
+        object.tag = tag_data;
         return object;
     }
     pub fn to_string(self: Self) []const u8 {
         switch (self.tag) {
-            Tag.String => {},
+            .string => |s| return s.chars,
         }
     }
 
     const Tag = enum {
-        String,
+        string,
     };
 };
 pub const String = struct {
-    obj: Object,
     chars: []u8,
-    pub fn copy_string(allocator: Allocator, chars: []const u8) *String {
+    pub fn copy_string(allocator: Allocator, chars: []const u8) *Object {
         errdefer {
             panic("OOM", .{});
         }
-        const str = try allocator.dupe(u8, chars);
-        const string_object = try create(allocator, str);
-        return string_object;
+        const heap_chars = try allocator.dupe(u8, chars);
+        const object = try create(allocator, heap_chars);
+        return object;
     }
-    pub fn create(allocator: Allocator, str: []const u8) !*String {
-        const object = Object.create(allocator, .String);
-        const data = String{ .chars = copy_chars };
-        return Object.create(allocator, .{ .tag = data });
+    pub fn create(allocator: Allocator, chars: []u8) !*Object {
+        const string_object = try allocator.create(String);
+        string_object.* = .{ .chars = chars };
+        return Object.create(allocator, .{ .string = string_object });
     }
 };

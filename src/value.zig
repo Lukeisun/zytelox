@@ -16,7 +16,12 @@ pub const Value = union(enum) {
         switch (self) {
             .float => |f| return f == other.float,
             .boolean => |b| return b == other.boolean,
-            .object => return false,
+            .object => |obj| {
+                if (@intFromEnum(obj.tag) != @intFromEnum(other.object.tag)) return false;
+                switch (obj.tag) {
+                    .string => |s| return std.mem.eql(u8, s.chars, other.object.tag.string.chars),
+                }
+            },
             .nil => return true,
         }
     }
