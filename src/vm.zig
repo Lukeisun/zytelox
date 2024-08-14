@@ -44,8 +44,6 @@ pub fn init(allocator: Allocator, writer: std.io.AnyWriter) *Self {
 }
 pub fn deinit(self: *Self) void {
     self.allocator.destroy(self);
-    // print("{any}", .{self});
-
 }
 fn reset_stack(self: *Self) void {
     self.stack = .{.nil} ** STACK_MAX;
@@ -60,6 +58,9 @@ pub fn pop(self: *Self) Value {
     self.stack_top[0] = .nil;
     self.stack_top -= 1;
     return self.stack_top[0];
+}
+fn peek(self: *Self, dist: u8) Value {
+    return (self.stack_top - (1 + dist))[0];
 }
 
 pub fn interpret(self: *Self, allocator: Allocator, source: [:0]const u8) !Result {
@@ -104,25 +105,42 @@ pub fn run(self: *Self) !Result {
                 self.push(constant);
             },
             .NEGATE => {
-                // no pop push
                 var constant: [*]Value = (self.stack_top - 1);
                 if (constant[0] != .float) {
                     self.runtime_error("Operand must be a number");
                     return Result.INTERPRET_RUNTIME_ERROR;
                 }
                 constant[0].float *= -1;
-                // pop push
-                // const constant = self.pop();
-                // switch (constant) {
-                //     .float => |f| self.push(Value{ .float = -f }),
-                //     else => unreachable,
-                // }
             },
             .NIL => self.push(.{ .nil = {} }),
             .FALSE => self.push(.{ .boolean = false }),
             .TRUE => self.push(.{ .boolean = true }),
             .NOT => self.push(.{ .boolean = self.falsey(self.pop()) }),
-            .ADD, .SUBTRACT, .MULTIPLY, .DIVIDE, .GREATER, .LESS => |op| {
+            .ADD => |op| {
+                const b = self.peek(0);
+                const a = self.peek(1);
+                if (@intFromEnum(a) != @intFromEnum(b)) {
+                    self.runtime_error("Values must have same active tag");
+                    return Result.INTERPRET_RUNTIME_ERROR;
+                }
+                switch (a) {
+                    .float => {
+                        const res = self.binary_op(op);
+                        if (res == .INTERPRET_RUNTIME_ERROR) return res;
+                    },
+                    .object => {
+                        if (a.object.tag != .string or b.object.tag != .string) {
+                            self.runtime_error("Value objects must be strings");
+                            return Result.INTERPRET_RUNTIME_ERROR;
+                        }
+                    },
+                    else => {
+                        self.runtime_error("Values must either be numbers or strings");
+                        return Result.INTERPRET_RUNTIME_ERROR;
+                    },
+                }
+            },
+            .SUBTRACT, .MULTIPLY, .DIVIDE, .GREATER, .LESS => |op| {
                 const res = self.binary_op(op);
                 if (res == .INTERPRET_RUNTIME_ERROR) return res;
             },

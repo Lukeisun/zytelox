@@ -7,7 +7,6 @@ pub const Object = struct {
     tag: union(Tag) {
         string: *String,
     },
-
     // maybe wont need this
     pub fn is_string(value: Value) bool {
         return is_type(value, Tag.String);

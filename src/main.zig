@@ -59,22 +59,6 @@ pub fn main() !void {
             try stderr.writeAll("Usage: zlox [script]\n");
         },
     }
-    // const constant = chunk.add_constant(.{ .float = 1.2 });
-    // // [ OP idx idx +1 ... OP ... ]
-    // const c: u8 = @truncate(constant);
-    // chunk.write_chunk(@intFromEnum(Op.CONSTANT), 369);
-    // chunk.write_chunk(c, 369);
-    // chunk.write_constant(.{ .float = 420 }, 369);
-    // chunk.write_chunk(@intFromEnum(Op.NEGATE), 369);
-    // chunk.write_chunk(@intFromEnum(Op.ADD), 369);
-    // chunk.write_chunk(@intFromEnum(Op.RETURN), 369);
-    // // chunk.disassemble_chunk("test chunk");
-    // _ = vm.interpret(&chunk) catch |err| {
-    //     std.debug.panic("{s}\n", .{@errorName(err)});
-    // };
-    // print("RES: {s}", .{x.items});
-    // _ = chunk.code;
-    // negate_time_test(gpa);
 }
 // Chapter 15 Challenge 4.
 // In ReleaseSafe without POP PUSH - 11 ms

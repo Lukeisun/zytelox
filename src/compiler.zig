@@ -107,7 +107,9 @@ fn number(self: *Self) void {
     self.emit_constant(.{ .float = value });
 }
 fn string(self: *Self) void {
-    const object = String.copy_string(self.allocator, self.parser.previous.start[0..self.parser.previous.length]);
+    // Strip off quotation marks.
+    const slice = self.parser.previous.start[1 .. self.parser.previous.length - 1];
+    const object = String.copy_string(self.allocator, slice);
     self.emit_constant(.{ .object = object });
 }
 fn literal(self: *Self) void {

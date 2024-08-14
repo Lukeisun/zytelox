@@ -26,7 +26,7 @@ pub const Value = union(enum) {
         }
     }
 };
-// this should probably be just for debug.
+// ONLY FOR DEBUG
 pub fn print_value(value: Value) void {
     switch (value) {
         .float => |f| print("{d}", .{f}),

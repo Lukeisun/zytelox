@@ -63,7 +63,6 @@ fn identifier(self: *Self) Token {
 fn identifier_type(self: *Self) TokenType {
     // Not gonna do what robert does here, static string map to the rescue
     const s = self.start[0 .. self.current - self.start];
-    print("KW : {s}\n", .{s});
     const token_type = keywords.get(s);
     if (token_type) |t| {
         return t;
