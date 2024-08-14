@@ -104,13 +104,9 @@ pub fn disassemble_instruction(self: *Self, offset: Size) Size {
     }
     const instruction: Op = @enumFromInt(self.code[offset]);
     switch (instruction) {
-        .RETURN => |i| return self.simple_instruction(@tagName(i), offset),
         .CONSTANT => |i| return self.constant_instruction(@tagName(i), offset),
         .CONSTANT_LONG => |i| return self.constant_long_instruction(@tagName(i), offset),
-        .NEGATE => |i| return self.simple_instruction(@tagName(i), offset),
-        .ADD, .SUBTRACT, .MULTIPLY, .DIVIDE, .NIL, .TRUE, .FALSE => |i| {
-            return self.simple_instruction(@tagName(i), offset);
-        },
+        else => |i| return self.simple_instruction(@tagName(i), offset),
     }
 }
 pub fn simple_instruction(_: *Self, tag_name: []const u8, offset: Size) Size {
@@ -146,6 +142,10 @@ pub const Op = enum(u8) {
     NIL,
     TRUE,
     FALSE,
+    NOT,
+    EQUAL,
+    GREATER,
+    LESS,
 };
 
 test "init" {

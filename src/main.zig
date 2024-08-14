@@ -34,6 +34,7 @@ pub fn repl(allocator: std.mem.Allocator, vm: *VM) !void {
     }
     print("\n", .{});
 }
+
 pub fn main() !void {
     var _gpa = std.heap.GeneralPurposeAllocator(.{}){};
     const gpa = _gpa.allocator();

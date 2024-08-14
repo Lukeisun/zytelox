@@ -20,6 +20,7 @@ stack: [STACK_MAX]Value,
 stack_top: [*]Value,
 writer: std.io.AnyWriter,
 allocator: Allocator,
+// TODO: maybe just change this to error set
 const Result = enum {
     INTERPRET_OK,
     INTERPRET_COMPILE_ERROR,
@@ -64,7 +65,7 @@ pub fn pop(self: *Self) Value {
 pub fn interpret(self: *Self, allocator: Allocator, source: [:0]const u8) !Result {
     var chunk = Chunk.create(allocator);
     defer chunk.free_chunk();
-    if (!compile(source, &chunk)) {
+    if (!compile(allocator, source, &chunk)) {
         return Result.INTERPRET_COMPILE_ERROR;
     }
     self.chunk = &chunk;
@@ -120,11 +121,24 @@ pub fn run(self: *Self) !Result {
             .NIL => self.push(.{ .nil = {} }),
             .FALSE => self.push(.{ .boolean = false }),
             .TRUE => self.push(.{ .boolean = true }),
-            .ADD, .SUBTRACT, .MULTIPLY, .DIVIDE => |op| self.binary_op(op),
+            .NOT => self.push(.{ .boolean = self.falsey(self.pop()) }),
+            .ADD, .SUBTRACT, .MULTIPLY, .DIVIDE, .GREATER, .LESS => |op| {
+                const res = self.binary_op(op);
+                if (res == .INTERPRET_RUNTIME_ERROR) return res;
+            },
+            .EQUAL => {
+                const b = self.pop();
+                const a = self.pop();
+                self.push(.{ .boolean = a.equals(b) });
+            },
 
             // else => unreachable,
         }
     }
+}
+
+fn falsey(_: *Self, value: Value) bool {
+    return value == .nil or (value == .boolean and !value.boolean);
 }
 
 fn read_byte(self: *Self) u8 {
@@ -148,9 +162,13 @@ fn read_constant_long(self: *Self) Value {
     }
     panic("CHUNK is NULL", .{});
 }
-fn binary_op(self: *Self, op: Op) void {
+fn binary_op(self: *Self, op: Op) Result {
     const b = self.pop();
     const a = self.pop();
+    if (b != .float or a != .float) {
+        self.runtime_error("Operands must be numbers");
+        return Result.INTERPRET_RUNTIME_ERROR;
+    }
     assert(std.meta.activeTag(b) == std.meta.activeTag(a));
     assert(b == .float);
     switch (op) {
@@ -158,8 +176,11 @@ fn binary_op(self: *Self, op: Op) void {
         Op.SUBTRACT => self.push(.{ .float = a.float - b.float }),
         Op.MULTIPLY => self.push(.{ .float = a.float * b.float }),
         Op.DIVIDE => self.push(.{ .float = a.float / b.float }),
+        Op.GREATER => self.push(.{ .boolean = a.float > b.float }),
+        Op.LESS => self.push(.{ .boolean = a.float < b.float }),
         else => unreachable,
     }
+    return Result.INTERPRET_OK;
 }
 fn runtime_error(self: *Self, message: []const u8) void {
     const line = self.chunk.?.lines[self.ip - self.chunk.?.code.ptr - 1];

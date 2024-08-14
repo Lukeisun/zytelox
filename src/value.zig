@@ -4,20 +4,38 @@ const mem = @import("memory.zig");
 const assert = std.debug.assert;
 const print = std.debug.print;
 const Size = @import("chunk.zig").Size;
+const Object = @import("object.zig").Object;
 
-pub const Value = union(enum) { float: f32, boolean: bool, nil };
+pub const Value = union(enum) {
+    float: f32,
+    boolean: bool,
+    object: *Object,
+    nil,
+    pub fn equals(self: Value, other: Value) bool {
+        if (@intFromEnum(self) != @intFromEnum(other)) return false;
+        switch (self) {
+            .float => |f| return f == other.float,
+            .boolean => |b| return b == other.boolean,
+            .object => return false,
+            .nil => return true,
+        }
+    }
+};
+// this should probably be just for debug.
 pub fn print_value(value: Value) void {
     switch (value) {
         .float => |f| print("{d}", .{f}),
         .boolean => |b| print("{}", .{b}),
-        .nil => print("nil", .{}),
+        .object => |o| print("{s}", .{o.to_string()}),
+        .nil => {},
     }
 }
 pub fn print_value_writer(value: Value, writer: std.io.AnyWriter) !void {
     switch (value) {
         .float => |f| try writer.print("{d}", .{f}),
         .boolean => |b| try writer.print("{}", .{b}),
-        .nil => print("nil", .{}),
+        .object => |o| try writer.print("{s}", .{o.to_string()}),
+        .nil => {},
     }
 }
 // maybe create an interface with this and chunk ?

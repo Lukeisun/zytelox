@@ -3,6 +3,10 @@ const Lexer = @import("lexer.zig");
 const Chunk = @import("chunk.zig");
 const Value = @import("value.zig").Value;
 const dbg = @import("main.zig").dbg;
+const _o = @import("object.zig");
+const Object = _o.Object;
+const String = _o.String;
+const Allocator = std.mem.Allocator;
 const Op = Chunk.Op;
 const TokenType = Lexer.TokenType;
 const Token = Lexer.Token;
@@ -12,15 +16,16 @@ const print = std.debug.print;
 const Self = @This();
 parser: Parser,
 lexer: Lexer,
+allocator: Allocator,
 
 const parser: Parser = undefined;
 var compiling_chunk: *Chunk = undefined;
 
-pub fn compile(source: [:0]const u8, chunk: *Chunk) bool {
+pub fn compile(allocator: Allocator, source: [:0]const u8, chunk: *Chunk) bool {
     compiling_chunk = chunk;
     const lexer = Lexer.init(source);
     // TODO: probably need to pass in a parser? or something
-    var self = Self{ .parser = parser, .lexer = lexer };
+    var self = Self{ .parser = parser, .lexer = lexer, .allocator = allocator };
     self.parser.had_error = false;
     self.parser.panic_mode = false;
     self.advance();
@@ -73,6 +78,12 @@ fn binary(self: *Self) void {
         .MINUS => self.emit_byte(@intFromEnum(Op.SUBTRACT)),
         .STAR => self.emit_byte(@intFromEnum(Op.MULTIPLY)),
         .SLASH => self.emit_byte(@intFromEnum(Op.DIVIDE)),
+        .BANG_EQUAL => self.emit_bytes(@intFromEnum(Op.EQUAL), @intFromEnum(Op.NOT)),
+        .GREATER => self.emit_byte(@intFromEnum(Op.GREATER)),
+        .GREATER_EQUAL => self.emit_bytes(@intFromEnum(Op.GREATER), @intFromEnum(Op.NOT)),
+        .LESS => self.emit_byte(@intFromEnum(Op.LESS)),
+        .LESS_EQUAL => self.emit_bytes(@intFromEnum(Op.LESS), @intFromEnum(Op.NOT)),
+        .EQUAL_EQUAL => self.emit_byte(@intFromEnum(Op.EQUAL)),
         else => unreachable,
     }
 }
@@ -80,7 +91,8 @@ fn unary(self: *Self) void {
     const tag = self.parser.previous.tag;
     self.parse_precedence(Precedence.UNARY);
     switch (tag) {
-        TokenType.MINUS => self.emit_byte(@intFromEnum(Op.NEGATE)),
+        .MINUS => self.emit_byte(@intFromEnum(Op.NEGATE)),
+        .BANG => self.emit_byte(@intFromEnum(Op.NOT)),
         else => unreachable,
     }
 }
@@ -93,6 +105,10 @@ fn number(self: *Self) void {
         panic("{s}", .{@errorName(err)});
     };
     self.emit_constant(.{ .float = value });
+}
+fn string(self: *Self) void {
+    const object = String.copy_string(self.allocator, self.parser.previous.start[0..self.parser.previous.length]);
+    self.emit_constant(.{ .object = object });
 }
 fn literal(self: *Self) void {
     switch (self.parser.previous.tag) {
@@ -159,15 +175,23 @@ const rules = blk: {
         r[s.value] = .{ .prefix = null, .infix = null, .precedence = Precedence.NONE };
     }
     // zig fmt: off
-    r[@intFromEnum(t.LEFT_PAREN)]  = .{ .prefix = grouping, .infix = null,     .precedence = Precedence.NONE   };
-    r[@intFromEnum(t.MINUS)]       = .{ .prefix = unary,    .infix = binary,   .precedence = Precedence.TERM   };
-    r[@intFromEnum(t.PLUS)]        = .{ .prefix = null,     .infix = binary,   .precedence = Precedence.TERM   };
-    r[@intFromEnum(t.SLASH)]       = .{ .prefix = null,     .infix = binary,   .precedence = Precedence.FACTOR };
-    r[@intFromEnum(t.STAR)]        = .{ .prefix = null,     .infix = binary,   .precedence = Precedence.FACTOR };
-    r[@intFromEnum(t.NUMBER)]      = .{ .prefix = number,   .infix = null,     .precedence = Precedence.NONE   };
-    r[@intFromEnum(t.FALSE)]       = .{ .prefix = literal,   .infix = null,     .precedence = Precedence.NONE  };
-    r[@intFromEnum(t.TRUE)]        = .{ .prefix = literal,   .infix = null,     .precedence = Precedence.NONE  };
-    r[@intFromEnum(t.NIL)]         = .{ .prefix = literal,   .infix = null,     .precedence = Precedence.NONE  };
+    r[@intFromEnum(t.LEFT_PAREN)]    = .{ .prefix = grouping, .infix = null,     .precedence = Precedence.NONE       };
+    r[@intFromEnum(t.MINUS)]         = .{ .prefix = unary,    .infix = binary,   .precedence = Precedence.TERM       };
+    r[@intFromEnum(t.BANG)]          = .{ .prefix = unary,    .infix = null,     .precedence = Precedence.NONE       };
+    r[@intFromEnum(t.PLUS)]          = .{ .prefix = null,     .infix = binary,   .precedence = Precedence.TERM       };
+    r[@intFromEnum(t.SLASH)]         = .{ .prefix = null,     .infix = binary,   .precedence = Precedence.FACTOR     };
+    r[@intFromEnum(t.STAR)]          = .{ .prefix = null,     .infix = binary,   .precedence = Precedence.FACTOR     };
+    r[@intFromEnum(t.NUMBER)]        = .{ .prefix = number,   .infix = null,     .precedence = Precedence.NONE       };
+    r[@intFromEnum(t.FALSE)]         = .{ .prefix = literal,  .infix = null,     .precedence = Precedence.NONE       };
+    r[@intFromEnum(t.TRUE)]          = .{ .prefix = literal,  .infix = null,     .precedence = Precedence.NONE       };
+    r[@intFromEnum(t.NIL)]           = .{ .prefix = literal,  .infix = null,     .precedence = Precedence.NONE       };
+    r[@intFromEnum(t.BANG_EQUAL)]    = .{ .prefix = unary,    .infix = null,     .precedence = Precedence.EQUALITY   };
+    r[@intFromEnum(t.EQUAL_EQUAL)]   = .{ .prefix = null,     .infix = binary,   .precedence = Precedence.EQUALITY   };
+    r[@intFromEnum(t.GREATER_EQUAL)] = .{ .prefix = null,     .infix = binary,   .precedence = Precedence.COMPARSION };
+    r[@intFromEnum(t.GREATER)]       = .{ .prefix = null,     .infix = binary,   .precedence = Precedence.COMPARSION };
+    r[@intFromEnum(t.LESS_EQUAL)]    = .{ .prefix = null,     .infix = binary,   .precedence = Precedence.COMPARSION };
+    r[@intFromEnum(t.LESS)]          = .{ .prefix = null,     .infix = binary,   .precedence = Precedence.COMPARSION };
+    r[@intFromEnum(t.STRING)]        = .{ .prefix = string,   .infix = null,     .precedence = Precedence.NONE };
     // zig fmt: on
     break :blk r;
 };
