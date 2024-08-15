@@ -10,22 +10,27 @@ const assert = std.debug.assert;
 const panic = std.debug.panic;
 
 pub const Size = u32;
-const max_load = 0.75;
+const max_load: f32 = 0.75;
 const Self = @This();
 count: Size,
 capacity: Size,
-entries: []*Entry,
+entries: []Entry,
 allocator: Allocator,
 
 pub fn init(allocator: Allocator) *Self {
     const table_ptr = allocator.create(Self) catch oom();
-    table_ptr.* = .{ .count = 0, .capacity = 0, .entries = &[_]Entry{}, .allocator = Allocator };
+    table_ptr.* = .{ .count = 0, .capacity = 0, .entries = &[_]Entry{}, .allocator = allocator };
     return table_ptr;
 }
+pub fn deinit(self: *Self) void {
+    self.allocator.free(self.entries);
+    self.allocator.destroy(self);
+}
 pub fn put(self: *Self, key: *String, value: Value) bool {
-    if (self.capacity * max_load < self.count + 1) {
-        self.capacity = self.next_capacity();
-        self.grow();
+    const load_factor: f32 = @as(f32, @floatFromInt(self.capacity)) * max_load;
+    if (load_factor < @as(f32, @floatFromInt(self.count + 1))) {
+        const new_capacity = self.next_capacity();
+        self.grow(new_capacity);
     }
     const entry = find_entry(self.entries, self.capacity, key);
     const is_new_key = entry.key == null;
@@ -56,6 +61,19 @@ pub fn add_all(from: *Self, to: *Self) void {
         }
     }
 }
+pub fn get_string(self: *Self, chars: []const u8, hash: Size) ?*String {
+    if (self.count == 0) return null;
+    var idx = hash % self.capacity;
+    while (true) {
+        const entry = &self.entries[idx];
+        if (entry.key) |k| {
+            if (k.chars.len == chars.len and k.hash == hash and std.mem.eql(u8, k.chars, chars)) return k;
+        } else {
+            if (entry.value == .nil) return null;
+        }
+        idx = (idx + 1) % self.capacity;
+    }
+}
 fn next_capacity(self: *Self) Size {
     if (self.capacity < 8) {
         return 8;
@@ -64,9 +82,9 @@ fn next_capacity(self: *Self) Size {
         if (res[1] == 1) return std.math.maxInt(Size) else return res[0];
     }
 }
-fn grow(self: *Self) []u8 {
-    var entries = self.allocator.realloc(self.entries, self.capacity) catch oom();
-    for (0..self.capacity) |i| {
+fn grow(self: *Self, capacity: Size) void {
+    var entries: []Entry = self.allocator.realloc(self.entries, capacity) catch oom();
+    for (0..capacity) |i| {
         entries[i] = .{ .key = null, .value = .nil };
     }
     self.count = 0;
@@ -80,12 +98,13 @@ fn grow(self: *Self) []u8 {
     }
     self.allocator.free(self.entries);
     self.entries = entries;
+    self.capacity = capacity;
 }
-fn find_entry(entries: []*Entry, capacity: Size, key: *String) *Entry {
+fn find_entry(entries: []Entry, capacity: Size, key: *String) *Entry {
     var idx: Size = key.hash % capacity;
     var tombstone: ?*Entry = null;
     while (true) {
-        const entry = entries[idx];
+        const entry = &entries[idx];
         if (entry.key) |k| {
             if (k == key) return entry;
         } else {
@@ -95,7 +114,7 @@ fn find_entry(entries: []*Entry, capacity: Size, key: *String) *Entry {
                 return entry;
             } else {
                 // found tombstone
-                if (tombstone) {} else {
+                if (tombstone) |_| {} else {
                     tombstone = entry;
                 }
             }
@@ -104,9 +123,6 @@ fn find_entry(entries: []*Entry, capacity: Size, key: *String) *Entry {
     }
 }
 
-pub fn deinit(self: *Self) void {
-    self.allocator.destroy(self);
-}
 const Entry = struct {
     key: ?*String,
     value: Value,

@@ -19,7 +19,7 @@ pub const Value = union(enum) {
             .object => |obj| {
                 if (@intFromEnum(obj.tag) != @intFromEnum(other.object.tag)) return false;
                 switch (obj.tag) {
-                    .string => |s| return std.mem.eql(u8, s.chars, other.object.tag.string.chars),
+                    .string => |s| return s == other.object.tag.string,
                 }
             },
             .nil => return true,

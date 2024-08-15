@@ -4,6 +4,7 @@ const Op = Chunk.Op;
 const Value = @import("value.zig").Value;
 const Size = @import("chunk.zig").Size;
 const Allocator = std.mem.Allocator;
+const Table = @import("table.zig");
 const dbg = @import("main.zig").dbg;
 const _o = @import("object.zig");
 const Object = _o.Object;
@@ -23,6 +24,7 @@ stack: [STACK_MAX]Value,
 stack_top: [*]Value,
 writer: std.io.AnyWriter,
 objects: ?*Object,
+strings: *Table,
 allocator: Allocator,
 pub const Result = error{
     INTERPRET_COMPILE_ERROR,
@@ -41,12 +43,14 @@ pub fn init(allocator: Allocator, writer: std.io.AnyWriter) *Self {
         .stack_top = undefined,
         .allocator = allocator,
         .objects = null,
+        .strings = Table.init(allocator),
     };
     vm_ptr.reset_stack();
     return vm_ptr;
 }
 pub fn deinit(self: *Self) void {
     self.free_objects();
+    self.strings.deinit();
     self.allocator.destroy(self);
 }
 fn free_objects(self: *Self) void {
