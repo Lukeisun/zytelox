@@ -17,6 +17,7 @@ pub fn runFile(allocator: std.mem.Allocator, filename: [:0]const u8, vm: *VM) !v
     defer file.close();
     // const source = try file.readToEndAlloc(allocator, stat.size);
     const source = try file.readToEndAllocOptions(allocator, stat.size, null, @alignOf(u8), 0);
+    defer allocator.free(source);
     std.debug.assert(source.len != 0);
     vm.interpret(allocator, source) catch |err| {
         switch (err) {
@@ -39,10 +40,12 @@ pub fn repl(allocator: std.mem.Allocator, vm: *VM) !void {
 
 pub fn main() !void {
     var _gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer _ = _gpa.detectLeaks();
     const gpa = _gpa.allocator();
     var args = try std.process.argsWithAllocator(gpa);
     defer args.deinit();
     var collected_args = std.ArrayList([:0]const u8).init(gpa);
+    defer collected_args.deinit();
     _ = args.skip();
     var vm = VM.init(gpa, std.io.getStdOut().writer().any());
     defer vm.deinit();

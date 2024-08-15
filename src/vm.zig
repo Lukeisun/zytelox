@@ -5,6 +5,9 @@ const Value = @import("value.zig").Value;
 const Size = @import("chunk.zig").Size;
 const Allocator = std.mem.Allocator;
 const dbg = @import("main.zig").dbg;
+const _o = @import("object.zig");
+const Object = _o.Object;
+const String = _o.String;
 const compile = @import("compiler.zig").compile;
 const print_value_writer = @import("value.zig").print_value_writer;
 const print_value = @import("value.zig").print_value;
@@ -19,6 +22,7 @@ ip: [*]u8,
 stack: [STACK_MAX]Value,
 stack_top: [*]Value,
 writer: std.io.AnyWriter,
+objects: ?*Object,
 allocator: Allocator,
 pub const Result = error{
     INTERPRET_COMPILE_ERROR,
@@ -36,12 +40,22 @@ pub fn init(allocator: Allocator, writer: std.io.AnyWriter) *Self {
         .stack = undefined,
         .stack_top = undefined,
         .allocator = allocator,
+        .objects = null,
     };
     vm_ptr.reset_stack();
     return vm_ptr;
 }
 pub fn deinit(self: *Self) void {
+    self.free_objects();
     self.allocator.destroy(self);
+}
+fn free_objects(self: *Self) void {
+    var object = self.objects;
+    while (object) |o| {
+        const next = o.next;
+        o.destroy(self.allocator);
+        object = next;
+    }
 }
 fn reset_stack(self: *Self) void {
     self.stack = .{.nil} ** STACK_MAX;
@@ -64,7 +78,7 @@ fn peek(self: *Self, dist: u8) Value {
 pub fn interpret(self: *Self, allocator: Allocator, source: [:0]const u8) !void {
     var chunk = Chunk.create(allocator);
     defer chunk.free_chunk();
-    if (!compile(allocator, source, &chunk)) {
+    if (!compile(allocator, self, source, &chunk)) {
         return Result.INTERPRET_COMPILE_ERROR;
     }
     self.chunk = &chunk;
@@ -130,6 +144,7 @@ pub fn run(self: *Self) !void {
                             self.runtime_error("Value objects must be strings");
                             return Result.INTERPRET_RUNTIME_ERROR;
                         }
+                        self.concat();
                     },
                     else => {
                         self.runtime_error("Values must either be numbers or strings");
@@ -149,6 +164,15 @@ pub fn run(self: *Self) !void {
     }
 }
 
+fn concat(self: *Self) void {
+    const b = self.pop();
+    const a = self.pop();
+    const chars = std.mem.concat(self.allocator, u8, &[_][]u8{ a.object.tag.string.chars, b.object.tag.string.chars }) catch {
+        panic("OOM", .{});
+    };
+    const object = String.take_string(self.allocator, self, chars);
+    self.push(.{ .object = object });
+}
 fn falsey(_: *Self, value: Value) bool {
     return value == .nil or (value == .boolean and !value.boolean);
 }

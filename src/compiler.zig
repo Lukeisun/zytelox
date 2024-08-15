@@ -1,6 +1,7 @@
 const std = @import("std");
 const Lexer = @import("lexer.zig");
 const Chunk = @import("chunk.zig");
+const VM = @import("vm.zig");
 const Value = @import("value.zig").Value;
 const dbg = @import("main.zig").dbg;
 const _o = @import("object.zig");
@@ -17,15 +18,16 @@ const Self = @This();
 parser: Parser,
 lexer: Lexer,
 allocator: Allocator,
+vm: *VM,
 
 const parser: Parser = undefined;
 var compiling_chunk: *Chunk = undefined;
 
-pub fn compile(allocator: Allocator, source: [:0]const u8, chunk: *Chunk) bool {
+pub fn compile(allocator: Allocator, vm: *VM, source: [:0]const u8, chunk: *Chunk) bool {
     compiling_chunk = chunk;
     const lexer = Lexer.init(source);
     // TODO: probably need to pass in a parser? or something
-    var self = Self{ .parser = parser, .lexer = lexer, .allocator = allocator };
+    var self = Self{ .parser = parser, .lexer = lexer, .allocator = allocator, .vm = vm };
     self.parser.had_error = false;
     self.parser.panic_mode = false;
     self.advance();
@@ -109,7 +111,7 @@ fn number(self: *Self) void {
 fn string(self: *Self) void {
     // Strip off quotation marks.
     const slice = self.parser.previous.start[1 .. self.parser.previous.length - 1];
-    const object = String.copy_string(self.allocator, slice);
+    const object = String.copy_string(self.allocator, self.vm, slice);
     self.emit_constant(.{ .object = object });
 }
 fn literal(self: *Self) void {
