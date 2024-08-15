@@ -2,6 +2,7 @@ const std = @import("std");
 const VM = @import("vm.zig");
 const Allocator = std.mem.Allocator;
 const panic = std.debug.panic;
+const print = std.debug.print;
 const Value = @import("value.zig").Value;
 pub const Object = struct {
     const Self = @This();
@@ -48,7 +49,7 @@ pub const Object = struct {
 // Might need to have pointer back to object but I'm not sure
 pub const String = struct {
     chars: []u8,
-    hash: u32,
+    hash: u64,
     pub fn copy_string(allocator: Allocator, vm: *VM, chars: []const u8) *Object {
         errdefer {
             panic("OOM", .{});
@@ -68,11 +69,11 @@ pub const String = struct {
         return Object.create(allocator, vm, .{ .string = string_object });
     }
     fn hash_string(key: []const u8) u32 {
-        std.HashMap
-        var hash: u32 = 2166136261;
+        var hash: u32 = 2_166_136_261;
         for (key) |k| {
             hash ^= k;
-            hash *= 16777619;
+            // need to wrap
+            hash *%= 16_777_619;
         }
         return hash;
     }
