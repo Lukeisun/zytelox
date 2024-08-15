@@ -146,6 +146,7 @@ pub fn make_token_error(self: *Self, message: [:0]const u8) Token {
 
 pub const Token = struct {
     tag: TokenType,
+    // TODO: I can probably switch this out to a slice
     start: [*:0]const u8,
     length: usize,
     line: u16,

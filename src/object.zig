@@ -11,16 +11,6 @@ pub const Object = struct {
     tag: union(Tag) {
         string: *String,
     },
-    // maybe wont need this
-    pub fn is_string(value: Value) bool {
-        return is_type(value, Tag.String);
-    }
-    fn is_type(value: Value, tag: Tag) bool {
-        return switch (value) {
-            .object => |o| o.tag == tag,
-            else => false,
-        };
-    }
     pub fn create(allocator: Allocator, vm: *VM, tag_data: anytype) *Object {
         errdefer {
             oom();
@@ -47,7 +37,7 @@ pub const Object = struct {
         string,
     };
 };
-// Might need to have pointer back to object but I'm not sure
+
 pub const String = struct {
     chars: []u8,
     hash: u32,
@@ -73,16 +63,6 @@ pub const String = struct {
             oom();
         };
     }
-    pub fn create(allocator: Allocator, vm: *VM, chars: []u8) !*Object {
-        const string_object = try allocator.create(String);
-        const hash = hash_string(chars);
-        string_object.* = .{ .chars = chars, .hash = hash };
-        _ = vm.strings.put(string_object, .nil);
-        return Object.create(allocator, vm, .{ .string = string_object });
-    }
-    fn create_intern(allocator: Allocator, vm: *VM, string: *String) !*Object {
-        return Object.create(allocator, vm, .{ .string = string });
-    }
     fn hash_string(key: []const u8) u32 {
         var hash: u32 = 2_166_136_261;
         for (key) |k| {
@@ -90,6 +70,13 @@ pub const String = struct {
             hash *%= 16_777_619;
         }
         return hash;
+    }
+    pub fn create(allocator: Allocator, vm: *VM, chars: []u8) !*Object {
+        const string_object = try allocator.create(String);
+        const hash = hash_string(chars);
+        string_object.* = .{ .chars = chars, .hash = hash };
+        _ = vm.strings.put(string_object, .nil);
+        return Object.create(allocator, vm, .{ .string = string_object });
     }
     pub fn destroy(self: *String, allocator: Allocator) void {
         allocator.free(self.chars);
@@ -104,6 +91,8 @@ pub const String = struct {
         // I could maybe also just store the whole Object in the hashmap
         // but does that make sense? I guess it does but it would be
         // UGLY!!! Uglier than the existing hm impl
+        // Could also just include an object pointer in the string, this
+        // seems to be the best option as of now.
         // We still save on a String allocation, which is a win?
         var object = vm.objects;
         while (object) |obj| {

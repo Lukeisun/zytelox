@@ -18,7 +18,7 @@ const panic = std.debug.panic;
 
 const Self = @This();
 const STACK_MAX = 256;
-chunk: ?*Chunk,
+chunk: *Chunk,
 ip: [*]u8,
 stack: [STACK_MAX]Value,
 stack_top: [*]Value,
@@ -36,7 +36,7 @@ pub fn init(allocator: Allocator, writer: std.io.AnyWriter) *Self {
         panic("OOM", .{});
     };
     vm_ptr.* = Self{
-        .chunk = null,
+        .chunk = undefined,
         .writer = writer,
         .ip = &[_]u8{},
         .stack = undefined,
@@ -86,7 +86,7 @@ pub fn interpret(self: *Self, allocator: Allocator, source: [:0]const u8) !void 
         return Result.INTERPRET_COMPILE_ERROR;
     }
     self.chunk = &chunk;
-    self.ip = self.chunk.?.code.ptr;
+    self.ip = self.chunk.code.ptr;
     return self.run();
 }
 
@@ -101,8 +101,8 @@ pub fn run(self: *Self) !void {
                 print(" ]", .{});
             }
             print("\n", .{});
-            const offset: u24 = @intCast(self.ip - self.chunk.?.code.ptr);
-            _ = self.chunk.?.disassemble_instruction(offset);
+            const offset: u24 = @intCast(self.ip - self.chunk.code.ptr);
+            _ = self.chunk.disassemble_instruction(offset);
         }
         const instruction: Op = @enumFromInt(self.read_byte());
         switch (instruction) {
@@ -187,20 +187,14 @@ fn read_byte(self: *Self) u8 {
 }
 
 fn read_constant(self: *Self) Value {
-    if (self.chunk) |chunk| {
-        return chunk.constants.values[self.read_byte()];
-    }
-    panic("CHUNK is NULL", .{});
+    return self.chunk.constants.values[self.read_byte()];
 }
 fn read_constant_long(self: *Self) Value {
-    if (self.chunk) |chunk| {
-        const idx: u24 =
-            self.read_byte() +
-            (@as(u24, self.read_byte()) << 8) +
-            (@as(u24, self.read_byte()) << 16);
-        return chunk.constants.values[idx];
-    }
-    panic("CHUNK is NULL", .{});
+    const idx: u24 =
+        self.read_byte() +
+        (@as(u24, self.read_byte()) << 8) +
+        (@as(u24, self.read_byte()) << 16);
+    return self.chunk.constants.values[idx];
 }
 fn binary_op(self: *Self, op: Op) !void {
     const b = self.pop();
@@ -223,7 +217,7 @@ fn binary_op(self: *Self, op: Op) !void {
     return;
 }
 fn runtime_error(self: *Self, message: []const u8) void {
-    const line = self.chunk.?.lines[self.ip - self.chunk.?.code.ptr - 1];
+    const line = self.chunk.lines[self.ip - self.chunk.code.ptr - 1];
     std.log.err("[line {d}] in script\n\t{s}", .{ line, message });
     self.reset_stack();
 }

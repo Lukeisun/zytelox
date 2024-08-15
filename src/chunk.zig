@@ -79,6 +79,7 @@ fn next_capacity(self: *Self) Size {
         if (res[1] == 1) return std.math.maxInt(Size) else return res[0];
     }
 }
+// TODO: fun little exercise but honestly, just switch to regular allocator functions
 // if capacity is 0 this will act as a free
 fn grow(self: *Self, prev_size: usize) []u8 {
     return mem.reallocate(self.allocator, self.code, prev_size, self.capacity);
