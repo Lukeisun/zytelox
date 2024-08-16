@@ -38,13 +38,13 @@ pub fn put(self: *Self, key: *String, value: Value) bool {
     entry.* = .{ .key = key, .value = value };
     return is_new_key;
 }
-pub fn get(self: *Self, key: *String, value: *Value) bool {
-    if (self.count == 0) return false;
+pub fn get(self: *Self, key: *String) ?Value {
+    if (self.count == 0) return null;
     const entry = find_entry(self.entries, self.capacity, key);
     if (entry.key) |_| {
-        value.* = entry.value;
+        return entry.value;
     }
-    return false;
+    return null;
 }
 pub fn remove(self: *Self, key: *String) bool {
     if (self.count == 0) return false;
@@ -83,7 +83,8 @@ fn next_capacity(self: *Self) Size {
     }
 }
 fn grow(self: *Self, capacity: Size) void {
-    var entries: []Entry = self.allocator.realloc(self.entries, capacity) catch oom();
+    var entries: []Entry = self.allocator.dupe(Entry, self.entries) catch oom();
+    entries = self.allocator.realloc(entries, capacity) catch oom();
     for (0..capacity) |i| {
         entries[i] = .{ .key = null, .value = .nil };
     }

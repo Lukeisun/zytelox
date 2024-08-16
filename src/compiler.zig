@@ -46,16 +46,20 @@ pub fn compile(allocator: Allocator, vm: *VM, source: [:0]const u8, chunk: *Chun
 }
 fn parse_precedence(self: *Self, precedence: Precedence) void {
     self.advance();
+    const can_assign = @intFromEnum(precedence) <= @intFromEnum(Precedence.ASSIGNMENT);
     const prefix_rule = self.get_rule(self.parser.previous.tag).prefix;
     if (prefix_rule) |rule| {
-        rule(self);
+        rule(self, can_assign);
     } else {
         panic("Expecting expression", .{});
     }
     while (@intFromEnum(precedence) <= @intFromEnum(self.get_rule(self.parser.current.tag).precedence)) {
         self.advance();
         const infix_rule = self.get_rule(self.parser.previous.tag).infix;
-        if (infix_rule) |rule| rule(self);
+        if (infix_rule) |rule| rule(self, can_assign);
+        if (can_assign and self.match(TokenType.EQUAL)) {
+            self.error_at_current("Invalid assignment target\n");
+        }
     }
 }
 fn declaration(self: *Self) void {
@@ -110,7 +114,7 @@ fn expression(self: *Self) void {
 fn get_rule(_: *Self, tag: TokenType) ParseRule {
     return rules[@intFromEnum(tag)];
 }
-fn binary(self: *Self) void {
+fn binary(self: *Self, _: bool) void {
     const tag = self.parser.previous.tag;
     const rule = self.get_rule(tag);
     self.parse_precedence(@enumFromInt(@intFromEnum(rule.precedence) + 1));
@@ -128,7 +132,7 @@ fn binary(self: *Self) void {
         else => unreachable,
     }
 }
-fn unary(self: *Self) void {
+fn unary(self: *Self, _: bool) void {
     const tag = self.parser.previous.tag;
     self.parse_precedence(Precedence.UNARY);
     switch (tag) {
@@ -137,7 +141,7 @@ fn unary(self: *Self) void {
         else => unreachable,
     }
 }
-fn grouping(self: *Self) void {
+fn grouping(self: *Self, _: bool) void {
     self.expression();
     self.consume(TokenType.RIGHT_PAREN, "Expect ')' after expression");
 }
@@ -166,19 +170,31 @@ fn advance(self: *Self) void {
         self.error_at_current(self.parser.current.start[0..self.parser.current.length]);
     }
 }
-fn number(self: *Self) void {
+fn number(self: *Self, _: bool) void {
     const value = std.fmt.parseFloat(f32, self.parser.previous.start[0..self.parser.previous.length]) catch |err| {
         panic("{s}", .{@errorName(err)});
     };
     _ = self.emit_constant(.{ .float = value });
 }
-fn string(self: *Self) void {
+fn variable(self: *Self, can_assign: bool) void {
+    self.named_variable(self.parser.previous, can_assign);
+}
+fn named_variable(self: *Self, name: Token, can_assign: bool) void {
+    const arg = self.identifier_constant(name);
+    if (can_assign and self.match(TokenType.EQUAL)) {
+        self.expression();
+        self.emit_bytes_val(@intFromEnum(Op.SET_GLOBAL), arg);
+    } else {
+        self.emit_bytes_val(@intFromEnum(Op.GET_GLOBAL), arg);
+    }
+}
+fn string(self: *Self, _: bool) void {
     // Strip off quotation marks.
     const slice = self.parser.previous.start[1 .. self.parser.previous.length - 1];
     const object = String.copy_string(self.allocator, self.vm, slice);
     _ = self.emit_constant(.{ .object = object });
 }
-fn literal(self: *Self) void {
+fn literal(self: *Self, _: bool) void {
     switch (self.parser.previous.tag) {
         .FALSE => self.emit_byte(Op.FALSE),
         .TRUE => self.emit_byte(Op.TRUE),
@@ -258,7 +274,7 @@ const Parser = struct {
     panic_mode: bool = false,
 };
 const ParseRule = struct {
-    const ParseFn = *const fn (*Self) void;
+    const ParseFn = *const fn (*Self, bool) void;
     prefix: ?ParseFn,
     infix: ?ParseFn,
     precedence: Precedence,
@@ -271,8 +287,8 @@ const rules = blk: {
     }
     // zig fmt: off
     r[@intFromEnum(t.LEFT_PAREN)]    = .{ .prefix = grouping, .infix = null,     .precedence = Precedence.NONE       };
-    r[@intFromEnum(t.MINUS)]         = .{ .prefix = unary,    .infix = binary,   .precedence = Precedence.TERM       };
     r[@intFromEnum(t.BANG)]          = .{ .prefix = unary,    .infix = null,     .precedence = Precedence.NONE       };
+    r[@intFromEnum(t.MINUS)]         = .{ .prefix = unary,    .infix = binary,   .precedence = Precedence.TERM       };
     r[@intFromEnum(t.PLUS)]          = .{ .prefix = null,     .infix = binary,   .precedence = Precedence.TERM       };
     r[@intFromEnum(t.SLASH)]         = .{ .prefix = null,     .infix = binary,   .precedence = Precedence.FACTOR     };
     r[@intFromEnum(t.STAR)]          = .{ .prefix = null,     .infix = binary,   .precedence = Precedence.FACTOR     };
@@ -286,7 +302,8 @@ const rules = blk: {
     r[@intFromEnum(t.GREATER)]       = .{ .prefix = null,     .infix = binary,   .precedence = Precedence.COMPARSION };
     r[@intFromEnum(t.LESS_EQUAL)]    = .{ .prefix = null,     .infix = binary,   .precedence = Precedence.COMPARSION };
     r[@intFromEnum(t.LESS)]          = .{ .prefix = null,     .infix = binary,   .precedence = Precedence.COMPARSION };
-    r[@intFromEnum(t.STRING)]        = .{ .prefix = string,   .infix = null,     .precedence = Precedence.NONE };
+    r[@intFromEnum(t.STRING)]        = .{ .prefix = string,   .infix = null,     .precedence = Precedence.NONE       };
+    r[@intFromEnum(t.IDENTIFIER)]    = .{ .prefix = variable, .infix = null,     .precedence = Precedence.NONE       };
     // zig fmt: on
     break :blk r;
 };

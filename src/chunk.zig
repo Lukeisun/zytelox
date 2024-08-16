@@ -106,7 +106,7 @@ pub fn disassemble_instruction(self: *Self, offset: Size) Size {
     }
     const instruction: Op = @enumFromInt(self.code[offset]);
     switch (instruction) {
-        .CONSTANT, .DEFINE_GLOBAL => |i| return self.constant_instruction(@tagName(i), offset),
+        .CONSTANT, .DEFINE_GLOBAL, .GET_GLOBAL, .SET_GLOBAL => |i| return self.constant_instruction(@tagName(i), offset),
         .CONSTANT_LONG => |i| return self.constant_long_instruction(@tagName(i), offset),
         else => |i| return self.simple_instruction(@tagName(i), offset),
     }
@@ -151,6 +151,8 @@ pub const Op = enum(u8) {
     PRINT,
     POP,
     DEFINE_GLOBAL,
+    GET_GLOBAL,
+    SET_GLOBAL,
 };
 
 test "init" {

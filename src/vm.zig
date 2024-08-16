@@ -140,6 +140,29 @@ pub fn run(self: *Self) !void {
                 _ = self.globals.put(constant.object.tag.string, self.peek(0));
                 _ = self.pop();
             },
+            .GET_GLOBAL => {
+                const constant = self.read_constant();
+                assert(constant.object.tag == .string);
+                const global = self.globals.get(constant.object.tag.string);
+                if (global) |_| {} else {
+                    var buf: [128]u8 = undefined;
+                    const written = std.fmt.bufPrint(&buf, "Undefined Variable: {s}", .{constant.object.tag.string.chars}) catch unreachable;
+                    self.runtime_error(written);
+                    return Result.INTERPRET_RUNTIME_ERROR;
+                }
+                self.push(global.?);
+            },
+            .SET_GLOBAL => {
+                const constant = self.read_constant();
+                assert(constant.object.tag == .string);
+                if (self.globals.put(constant.object.tag.string, self.peek(0))) {
+                    _ = self.globals.remove(constant.object.tag.string);
+                    var buf: [128]u8 = undefined;
+                    const written = std.fmt.bufPrint(&buf, "Undefined Variable: {s}", .{constant.object.tag.string.chars}) catch unreachable;
+                    self.runtime_error(written);
+                    return Result.INTERPRET_RUNTIME_ERROR;
+                }
+            },
             .NIL => self.push(.{ .nil = {} }),
             .FALSE => self.push(.{ .boolean = false }),
             .TRUE => self.push(.{ .boolean = true }),
@@ -187,6 +210,7 @@ fn concat(self: *Self) void {
         panic("OOM", .{});
     };
     const object = String.take_string(self.allocator, self, chars);
+    std.debug.print("OBJECT {any}\n", .{object});
     self.push(.{ .object = object });
 }
 fn falsey(_: *Self, value: Value) bool {
