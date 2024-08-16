@@ -25,6 +25,7 @@ stack_top: [*]Value,
 writer: std.io.AnyWriter,
 objects: ?*Object,
 strings: *Table,
+globals: *Table,
 allocator: Allocator,
 pub const Result = error{
     INTERPRET_COMPILE_ERROR,
@@ -44,12 +45,14 @@ pub fn init(allocator: Allocator, writer: std.io.AnyWriter) *Self {
         .allocator = allocator,
         .objects = null,
         .strings = Table.init(allocator),
+        .globals = Table.init(allocator),
     };
     vm_ptr.reset_stack();
     return vm_ptr;
 }
 pub fn deinit(self: *Self) void {
     self.free_objects();
+    self.globals.deinit();
     self.strings.deinit();
     self.allocator.destroy(self);
 }
@@ -107,9 +110,6 @@ pub fn run(self: *Self) !void {
         const instruction: Op = @enumFromInt(self.read_byte());
         switch (instruction) {
             .RETURN => {
-                const value = self.pop();
-                try print_value_writer(value, self.writer);
-                try self.writer.print("\n", .{});
                 return;
             },
             .CONSTANT => {
@@ -127,6 +127,18 @@ pub fn run(self: *Self) !void {
                     return Result.INTERPRET_RUNTIME_ERROR;
                 }
                 constant[0].float *= -1;
+            },
+            .PRINT => {
+                const value = self.pop();
+                try print_value_writer(value, self.writer);
+                try self.writer.print("\n", .{});
+            },
+            .POP => _ = self.pop(),
+            .DEFINE_GLOBAL => {
+                const constant = self.read_constant();
+                assert(constant.object.tag == .string);
+                _ = self.globals.put(constant.object.tag.string, self.peek(0));
+                _ = self.pop();
             },
             .NIL => self.push(.{ .nil = {} }),
             .FALSE => self.push(.{ .boolean = false }),

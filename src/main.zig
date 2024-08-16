@@ -78,7 +78,7 @@ pub fn negate_time_test(allo: std.mem.Allocator) void {
     const stdout = std.io.getStdOut();
     const vm = VM.init(stdout.writer().any());
     defer vm.deinit();
-    chunk.write_constant(.{ .float = 169 }, 69);
+    _ = chunk.write_constant(.{ .float = 169 }, 69);
     var i: Chunk.Size = undefined;
     while (i < std.math.maxInt(Chunk.Size)) : (i += 1) {
         chunk.write_chunk(@intFromEnum(Op.NEGATE), 69);

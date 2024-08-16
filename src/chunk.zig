@@ -41,7 +41,7 @@ pub fn write_chunk(self: *Self, byte: u8, line: u16) void {
     self.count += 1;
 }
 // Challenge 2 Part 14
-pub fn write_constant(self: *Self, value: Value, line: u16) void {
+pub fn write_constant(self: *Self, value: Value, line: u16) Size {
     const count = self.constants.count;
     if (count > std.math.maxInt(Size)) panic("Too many constants in one chunk", .{});
     const op = if (count > std.math.maxInt(u8)) Op.CONSTANT_LONG else Op.CONSTANT;
@@ -59,6 +59,7 @@ pub fn write_constant(self: *Self, value: Value, line: u16) void {
         },
         else => unreachable,
     }
+    return constant;
 }
 pub fn add_constant(self: *Self, value: Value) Size {
     self.constants.write_value_array(value);
@@ -105,7 +106,7 @@ pub fn disassemble_instruction(self: *Self, offset: Size) Size {
     }
     const instruction: Op = @enumFromInt(self.code[offset]);
     switch (instruction) {
-        .CONSTANT => |i| return self.constant_instruction(@tagName(i), offset),
+        .CONSTANT, .DEFINE_GLOBAL => |i| return self.constant_instruction(@tagName(i), offset),
         .CONSTANT_LONG => |i| return self.constant_long_instruction(@tagName(i), offset),
         else => |i| return self.simple_instruction(@tagName(i), offset),
     }
@@ -147,6 +148,9 @@ pub const Op = enum(u8) {
     EQUAL,
     GREATER,
     LESS,
+    PRINT,
+    POP,
+    DEFINE_GLOBAL,
 };
 
 test "init" {
@@ -170,7 +174,7 @@ test "max constants" {
     defer chunk.free_chunk();
     var i: Size = 0;
     while (i < 16777215 / 4) : (i += 1) {
-        chunk.write_constant(.{ .float = 69 }, 0);
+        _ = chunk.write_constant(.{ .float = 69 }, 0);
     }
     const max = std.math.maxInt(Size);
     assert(chunk.capacity == max);

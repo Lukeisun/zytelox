@@ -5,6 +5,7 @@ const VM = @import("vm.zig");
 const Value = @import("value.zig").Value;
 const dbg = @import("main.zig").dbg;
 const _o = @import("object.zig");
+const Size = Chunk.Size;
 const Object = _o.Object;
 const String = _o.String;
 const Allocator = std.mem.Allocator;
@@ -18,38 +19,30 @@ const Self = @This();
 parser: Parser,
 lexer: Lexer,
 allocator: Allocator,
+compiling_chunk: *Chunk,
 vm: *VM,
 
-const parser: Parser = undefined;
-var compiling_chunk: *Chunk = undefined;
-
 pub fn compile(allocator: Allocator, vm: *VM, source: [:0]const u8, chunk: *Chunk) bool {
-    compiling_chunk = chunk;
     const lexer = Lexer.init(source);
     // TODO: probably need to pass in a parser? or something
-    var self = Self{ .parser = parser, .lexer = lexer, .allocator = allocator, .vm = vm };
+    var self = Self{
+        .parser = .{
+            .current = undefined,
+            .previous = undefined,
+        },
+        .lexer = lexer,
+        .allocator = allocator,
+        .vm = vm,
+        .compiling_chunk = chunk,
+    };
     self.parser.had_error = false;
     self.parser.panic_mode = false;
     self.advance();
-    self.expression();
-    self.consume(TokenType.EOF, "Expect end of expression.");
+    while (!self.match(TokenType.EOF)) {
+        self.declaration();
+    }
     self.end_compiler();
     return !self.parser.had_error;
-}
-fn consume(self: *Self, tag: TokenType, message: []const u8) void {
-    if (self.parser.current.tag == tag) {
-        self.advance();
-        return;
-    }
-    self.error_at_current(message);
-}
-fn advance(self: *Self) void {
-    self.parser.previous = self.parser.current;
-    while (true) {
-        self.parser.current = self.lexer.next();
-        if (self.parser.current.tag != .ERROR) break;
-        self.error_at_current(self.parser.current.start[0..self.parser.current.length]);
-    }
 }
 fn parse_precedence(self: *Self, precedence: Precedence) void {
     self.advance();
@@ -65,6 +58,52 @@ fn parse_precedence(self: *Self, precedence: Precedence) void {
         if (infix_rule) |rule| rule(self);
     }
 }
+fn declaration(self: *Self) void {
+    if (self.match(TokenType.VAR)) {
+        self.var_declaration();
+    } else {
+        self.statement();
+    }
+    if (self.parser.panic_mode) self.synchronize();
+}
+fn statement(self: *Self) void {
+    if (self.match(TokenType.PRINT)) {
+        self.print_statement();
+    } else {
+        self.expression_statement();
+    }
+}
+fn var_declaration(self: *Self) void {
+    const global = self.parse_variable("Expect variable name");
+    if (self.match(TokenType.EQUAL)) {
+        self.expression();
+    } else {
+        self.emit_byte(Op.NIL);
+    }
+    _ = self.consume(TokenType.SEMICOLON, "Expect ';' after expression");
+    self.define_variable(global);
+}
+fn define_variable(self: *Self, idx: u8) void {
+    self.emit_bytes_val(@intFromEnum(Op.DEFINE_GLOBAL), idx);
+}
+fn parse_variable(self: *Self, error_message: []const u8) u8 {
+    _ = self.consume(TokenType.IDENTIFIER, error_message);
+    return self.identifier_constant(self.parser.previous);
+}
+fn identifier_constant(self: *Self, token: Token) u8 {
+    const str = token.start[0..token.length];
+    return self.make_constant(.{ .object = String.copy_string(self.allocator, self.vm, str) });
+}
+fn expression_statement(self: *Self) void {
+    self.expression();
+    self.consume(TokenType.SEMICOLON, "Expect ';' after expression");
+    self.emit_byte(Op.POP);
+}
+fn print_statement(self: *Self) void {
+    self.expression();
+    self.consume(TokenType.SEMICOLON, "Expect ';' after value");
+    self.emit_byte(Op.PRINT);
+}
 fn expression(self: *Self) void {
     self.parse_precedence(Precedence.ASSIGNMENT);
 }
@@ -76,16 +115,16 @@ fn binary(self: *Self) void {
     const rule = self.get_rule(tag);
     self.parse_precedence(@enumFromInt(@intFromEnum(rule.precedence) + 1));
     switch (tag) {
-        .PLUS => self.emit_byte(@intFromEnum(Op.ADD)),
-        .MINUS => self.emit_byte(@intFromEnum(Op.SUBTRACT)),
-        .STAR => self.emit_byte(@intFromEnum(Op.MULTIPLY)),
-        .SLASH => self.emit_byte(@intFromEnum(Op.DIVIDE)),
-        .BANG_EQUAL => self.emit_bytes(@intFromEnum(Op.EQUAL), @intFromEnum(Op.NOT)),
-        .GREATER => self.emit_byte(@intFromEnum(Op.GREATER)),
-        .GREATER_EQUAL => self.emit_bytes(@intFromEnum(Op.GREATER), @intFromEnum(Op.NOT)),
-        .LESS => self.emit_byte(@intFromEnum(Op.LESS)),
-        .LESS_EQUAL => self.emit_bytes(@intFromEnum(Op.LESS), @intFromEnum(Op.NOT)),
-        .EQUAL_EQUAL => self.emit_byte(@intFromEnum(Op.EQUAL)),
+        .PLUS => self.emit_byte(Op.ADD),
+        .MINUS => self.emit_byte(Op.SUBTRACT),
+        .STAR => self.emit_byte(Op.MULTIPLY),
+        .SLASH => self.emit_byte(Op.DIVIDE),
+        .BANG_EQUAL => self.emit_bytes(Op.EQUAL, Op.NOT),
+        .GREATER => self.emit_byte(Op.GREATER),
+        .GREATER_EQUAL => self.emit_bytes(Op.GREATER, Op.NOT),
+        .LESS => self.emit_byte(Op.LESS),
+        .LESS_EQUAL => self.emit_bytes(Op.LESS, Op.NOT),
+        .EQUAL_EQUAL => self.emit_byte(Op.EQUAL),
         else => unreachable,
     }
 }
@@ -93,8 +132,8 @@ fn unary(self: *Self) void {
     const tag = self.parser.previous.tag;
     self.parse_precedence(Precedence.UNARY);
     switch (tag) {
-        .MINUS => self.emit_byte(@intFromEnum(Op.NEGATE)),
-        .BANG => self.emit_byte(@intFromEnum(Op.NOT)),
+        .MINUS => self.emit_byte(Op.NEGATE),
+        .BANG => self.emit_byte(Op.NOT),
         else => unreachable,
     }
 }
@@ -102,28 +141,63 @@ fn grouping(self: *Self) void {
     self.expression();
     self.consume(TokenType.RIGHT_PAREN, "Expect ')' after expression");
 }
+fn consume(self: *Self, tag: TokenType, message: []const u8) void {
+    if (self.parser.current.tag == tag) {
+        self.advance();
+        return;
+    }
+    self.error_at_current(message);
+}
+fn match(self: *Self, tag: TokenType) bool {
+    if (!self.check(tag)) {
+        return false;
+    }
+    self.advance();
+    return true;
+}
+fn check(self: *Self, tag: TokenType) bool {
+    return self.parser.current.tag == tag;
+}
+fn advance(self: *Self) void {
+    self.parser.previous = self.parser.current;
+    while (true) {
+        self.parser.current = self.lexer.next();
+        if (self.parser.current.tag != .ERROR) break;
+        self.error_at_current(self.parser.current.start[0..self.parser.current.length]);
+    }
+}
 fn number(self: *Self) void {
     const value = std.fmt.parseFloat(f32, self.parser.previous.start[0..self.parser.previous.length]) catch |err| {
         panic("{s}", .{@errorName(err)});
     };
-    self.emit_constant(.{ .float = value });
+    _ = self.emit_constant(.{ .float = value });
 }
 fn string(self: *Self) void {
     // Strip off quotation marks.
     const slice = self.parser.previous.start[1 .. self.parser.previous.length - 1];
     const object = String.copy_string(self.allocator, self.vm, slice);
-    self.emit_constant(.{ .object = object });
+    _ = self.emit_constant(.{ .object = object });
 }
 fn literal(self: *Self) void {
     switch (self.parser.previous.tag) {
-        .FALSE => self.emit_byte(@intFromEnum(Op.FALSE)),
-        .TRUE => self.emit_byte(@intFromEnum(Op.TRUE)),
-        .NIL => self.emit_byte(@intFromEnum(Op.NIL)),
+        .FALSE => self.emit_byte(Op.FALSE),
+        .TRUE => self.emit_byte(Op.TRUE),
+        .NIL => self.emit_byte(Op.NIL),
         else => unreachable,
     }
 }
-fn emit_constant(self: *Self, value: Value) void {
-    self.current_chunk().write_constant(value, self.parser.previous.line);
+fn make_constant(self: *Self, value: Value) u8 {
+    const constant = self.current_chunk().add_constant(value);
+    if (constant > std.math.maxInt(u8)) {
+        // hmm could just have a DEFINE_GLOBAL_LONG?
+        panic("More than 256 constants, not supported yet", .{});
+    }
+    return @truncate(constant);
+}
+fn emit_constant(self: *Self, value: Value) Size {
+    const constant = self.make_constant(value);
+    self.emit_bytes_val(@intFromEnum(Op.CONSTANT), constant);
+    return constant;
 }
 fn end_compiler(self: *Self) void {
     self.emit_return();
@@ -131,21 +205,38 @@ fn end_compiler(self: *Self) void {
         self.current_chunk().disassemble_chunk("code");
     }
 }
-fn emit_byte(self: *Self, byte: u8) void {
-    self.current_chunk().write_chunk(byte, self.parser.previous.line);
-}
-fn emit_bytes(self: *Self, byte1: u8, byte2: u8) void {
+fn emit_bytes(self: *Self, byte1: Op, byte2: Op) void {
     self.emit_byte(byte1);
     self.emit_byte(byte2);
 }
-fn emit_return(self: *Self) void {
-    self.emit_byte(@intFromEnum(Op.RETURN));
+fn emit_byte(self: *Self, byte: Op) void {
+    self.current_chunk().write_chunk(@intFromEnum(byte), self.parser.previous.line);
 }
-fn current_chunk(_: *Self) *Chunk {
-    return compiling_chunk;
+fn emit_bytes_val(self: *Self, byte1: u8, byte2: u8) void {
+    self.emit_byte_val(byte1);
+    self.emit_byte_val(byte2);
+}
+fn emit_byte_val(self: *Self, byte: u8) void {
+    self.current_chunk().write_chunk(byte, self.parser.previous.line);
+}
+fn emit_return(self: *Self) void {
+    self.emit_byte(Op.RETURN);
+}
+fn current_chunk(self: *Self) *Chunk {
+    return self.compiling_chunk;
 }
 fn error_at_current(self: *Self, message: []const u8) void {
     self.error_at(self.parser.previous, message);
+}
+fn synchronize(self: *Self) void {
+    while (self.parser.current.tag != TokenType.EOF) {
+        if (self.parser.previous.tag == TokenType.SEMICOLON) return;
+        switch (self.parser.current.tag) {
+            .CLASS, .FUN, .VAR, .FOR, .IF, .WHILE, .PRINT, .RETURN => return,
+            else => {},
+        }
+        self.advance();
+    }
 }
 fn error_at(self: *Self, token: Token, message: []const u8) void {
     if (self.parser.panic_mode) return;
