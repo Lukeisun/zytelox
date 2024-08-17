@@ -79,14 +79,12 @@ pub const ValueArray = struct {
     }
 };
 test "init" {
-    var value_array: ValueArray = undefined;
-    value_array.init(std.testing.allocator);
+    const value_array: ValueArray = ValueArray.init(std.testing.allocator);
     assert(value_array.capacity == 0 and value_array.count == 0 and value_array.values.len == 0);
 }
 test "grow" {
-    var value_array: ValueArray = undefined;
+    var value_array: ValueArray = ValueArray.init(std.testing.allocator);
     defer value_array.free_value_array();
-    value_array.init(std.testing.allocator);
     value_array.write_value_array(.{ .float = 32 });
     assert(value_array.capacity == 8 and value_array.count == 1 and value_array.values.len == 8);
 }

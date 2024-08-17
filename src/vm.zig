@@ -210,7 +210,6 @@ fn concat(self: *Self) void {
         panic("OOM", .{});
     };
     const object = String.take_string(self.allocator, self, chars);
-    std.debug.print("OBJECT {any}\n", .{object});
     self.push(.{ .object = object });
 }
 fn falsey(_: *Self, value: Value) bool {

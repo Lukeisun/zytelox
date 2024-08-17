@@ -266,6 +266,15 @@ fn error_at(self: *Self, token: Token, message: []const u8) void {
     std.log.err("{s}\n", .{message});
     self.parser.had_error = true;
 }
+const Compiler = struct {
+    locals: Local[std.math.maxInt(u8)],
+    local_count: u8,
+    scope_depth: u8,
+};
+const Local = struct {
+    name: Token,
+    depth: u8,
+};
 const Parser = struct {
     current: Token,
     previous: Token,
@@ -335,14 +344,4 @@ pub fn compile_test(source: [:0]const u8) void {
         print("{s:>2} '{s}'\n", .{ @tagName(token.tag), token.start[0..token.length] });
         if (token.tag == TokenType.EOF) break;
     }
-}
-
-test "remove" {
-    compile_test(
-        \\ fun var let  
-        \\ 123 "test" 123.42
-        \\ // comment
-        \\ * + - /
-        \\ &
-    );
 }

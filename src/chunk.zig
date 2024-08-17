@@ -156,13 +156,13 @@ pub const Op = enum(u8) {
 };
 
 test "init" {
-    const chunk = Self.create(std.testing.allocator);
+    var chunk = Self.create(std.testing.allocator);
     defer chunk.free_chunk();
     assert(chunk.capacity == 0 and chunk.count == 0 and chunk.code.len == 0);
     assert(chunk.lines.len == 0);
 }
 test "grow" {
-    const chunk = Self.create(std.testing.allocator);
+    var chunk = Self.create(std.testing.allocator);
     defer chunk.free_chunk();
     chunk.write_chunk(@intFromEnum(Op.CONSTANT), 0);
     assert(chunk.capacity == 8 and chunk.count == 1 and chunk.code.len == 8);
@@ -172,7 +172,7 @@ test "grow" {
 // once we go past u8
 // reevaluate this test
 test "max constants" {
-    const chunk = Self.create(std.testing.allocator);
+    var chunk = Self.create(std.testing.allocator);
     defer chunk.free_chunk();
     var i: Size = 0;
     while (i < 16777215 / 4) : (i += 1) {

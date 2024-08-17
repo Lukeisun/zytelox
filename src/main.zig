@@ -6,6 +6,7 @@ const Op = @import("chunk.zig").Op;
 const Result = VM.Result;
 const print_value = @import("value.zig").print_value;
 const print = std.debug.print;
+const assert = std.debug.assert;
 pub const dbg = (builtin.mode == std.builtin.OptimizeMode.Debug);
 
 pub fn runFile(allocator: std.mem.Allocator, filename: [:0]const u8, vm: *VM) !void {
@@ -88,4 +89,45 @@ pub fn negate_time_test(allo: std.mem.Allocator) void {
         std.debug.panic("{s}\n", .{@errorName(err)});
     };
     print("TIME {d}\n", .{timer.read() / std.time.ns_per_ms});
+}
+pub fn run_test(allocator: std.mem.Allocator, source: [:0]const u8) ![]u8 {
+    var out = std.ArrayList(u8).init(allocator);
+    defer out.deinit();
+    var vm = VM.init(allocator, out.writer().any());
+    defer vm.deinit();
+    std.debug.assert(source.len != 0);
+    vm.interpret(allocator, source) catch |err| {
+        switch (err) {
+            Result.INTERPRET_COMPILE_ERROR => std.process.exit(65),
+            Result.INTERPRET_RUNTIME_ERROR => std.process.exit(70),
+            else => unreachable,
+        }
+    };
+    return out.toOwnedSlice();
+}
+
+test "hello_world" {
+    const allocator = std.testing.allocator;
+    const src =
+        \\ print "hello world!";
+    ;
+    const out = try run_test(allocator, src);
+    defer allocator.free(out);
+    assert(std.mem.eql(u8, out, "hello world!\n"));
+}
+test "global vars" {
+    const allocator = std.testing.allocator;
+    const src =
+        \\var beverage = "cafe au lait";
+        \\var breakfast = "beignets";
+        \\breakfast = breakfast + " with " +  beverage;
+        \\print breakfast;
+    ;
+    const compare =
+        \\beignets with cafe au lait
+        \\
+    ;
+    const out = try run_test(allocator, src);
+    defer allocator.free(out);
+    try std.testing.expectEqualSlices(u8, compare, out);
 }
