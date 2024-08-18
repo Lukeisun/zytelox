@@ -108,12 +108,18 @@ pub fn disassemble_instruction(self: *Self, offset: Size) Size {
     switch (instruction) {
         .CONSTANT, .DEFINE_GLOBAL, .GET_GLOBAL, .SET_GLOBAL => |i| return self.constant_instruction(@tagName(i), offset),
         .CONSTANT_LONG => |i| return self.constant_long_instruction(@tagName(i), offset),
+        .GET_LOCAL, .SET_LOCAL => |i| return self.byte_instruction(@tagName(i), offset),
         else => |i| return self.simple_instruction(@tagName(i), offset),
     }
 }
 pub fn simple_instruction(_: *Self, tag_name: []const u8, offset: Size) Size {
     print("{s}\n", .{tag_name});
     return offset + 1;
+}
+pub fn byte_instruction(self: *Self, tag_name: []const u8, offset: Size) Size {
+    const slot = self.code[offset + 1];
+    print("{s: <16} {d:>4} '", .{ tag_name, slot });
+    return offset + 2;
 }
 pub fn constant_instruction(self: *Self, tag_name: []const u8, offset: Size) Size {
     const constant = self.code[offset + 1];
@@ -128,7 +134,6 @@ pub fn constant_long_instruction(self: *Self, tag_name: []const u8, offset: Size
         (@as(u24, self.code[offset + 2]) << 8) +
         (@as(u24, self.code[offset + 3]) << 16);
     print("{s: <16} {d:>4} '", .{ tag_name, constant });
-    print_value(self.constants.values[constant]);
     print("'\n", .{});
     return offset + 4;
 }
@@ -153,6 +158,8 @@ pub const Op = enum(u8) {
     DEFINE_GLOBAL,
     GET_GLOBAL,
     SET_GLOBAL,
+    GET_LOCAL,
+    SET_LOCAL,
 };
 
 test "init" {

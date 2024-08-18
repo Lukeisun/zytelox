@@ -16,14 +16,17 @@ const panic = std.debug.panic;
 const print = std.debug.print;
 
 const Self = @This();
+const LocalError = error{NotFound};
 parser: Parser,
 lexer: Lexer,
 allocator: Allocator,
 compiling_chunk: *Chunk,
+compiler: Compiler,
 vm: *VM,
 
 pub fn compile(allocator: Allocator, vm: *VM, source: [:0]const u8, chunk: *Chunk) bool {
     const lexer = Lexer.init(source);
+    const compiler = Compiler.init();
     // TODO: probably need to pass in a parser? or something
     var self = Self{
         .parser = .{
@@ -34,6 +37,7 @@ pub fn compile(allocator: Allocator, vm: *VM, source: [:0]const u8, chunk: *Chun
         .allocator = allocator,
         .vm = vm,
         .compiling_chunk = chunk,
+        .compiler = compiler,
     };
     self.parser.had_error = false;
     self.parser.panic_mode = false;
@@ -73,9 +77,19 @@ fn declaration(self: *Self) void {
 fn statement(self: *Self) void {
     if (self.match(TokenType.PRINT)) {
         self.print_statement();
+    } else if (self.match(TokenType.LEFT_BRACE)) {
+        self.begin_scope();
+        self.block();
+        self.end_scope();
     } else {
         self.expression_statement();
     }
+}
+fn block(self: *Self) void {
+    while (!self.check(TokenType.RIGHT_BRACE) and !self.check(TokenType.EOF)) {
+        self.declaration();
+    }
+    self.consume(TokenType.RIGHT_BRACE, "Expecting '}' after block.");
 }
 fn var_declaration(self: *Self) void {
     const global = self.parse_variable("Expect variable name");
@@ -88,11 +102,60 @@ fn var_declaration(self: *Self) void {
     self.define_variable(global);
 }
 fn define_variable(self: *Self, idx: u8) void {
+    if (self.compiler.scope_depth > 0) {
+        self.mark_initialized();
+        return;
+    }
     self.emit_bytes_val(@intFromEnum(Op.DEFINE_GLOBAL), idx);
+}
+fn mark_initialized(self: *Self) void {
+    self.compiler.locals[self.compiler.local_count - 1].depth = self.compiler.scope_depth;
 }
 fn parse_variable(self: *Self, error_message: []const u8) u8 {
     _ = self.consume(TokenType.IDENTIFIER, error_message);
+    self.declare_variable();
+    if (self.compiler.scope_depth > 0) return 0;
     return self.identifier_constant(self.parser.previous);
+}
+fn declare_variable(self: *Self) void {
+    if (self.compiler.scope_depth == 0) return;
+    const name = self.parser.previous;
+    var i = self.compiler.local_count;
+    while (i > 0) : (i -= 1) {
+        const local = self.compiler.locals[i];
+        if (local.depth != -1 and local.depth < self.compiler.scope_depth) break;
+        if (self.ident_equal(name, local.name)) {
+            self.error_at_current("Already a variable with name in scope");
+        }
+    }
+    self.add_local(name);
+}
+fn resolve_local(self: *Self, name: Token) !u8 {
+    var i = self.compiler.local_count;
+    while (i > 0) {
+        i -= 1;
+        const local = self.compiler.locals[i];
+        if (self.ident_equal(name, local.name)) {
+            if (local.depth == -1) {
+                self.error_at_current("Can't read local variable in own initializer");
+            }
+            return @truncate(i);
+        }
+    }
+    return LocalError.NotFound;
+}
+fn ident_equal(_: *Self, a: Token, b: Token) bool {
+    if (a.length != b.length) return false;
+    return std.mem.eql(u8, a.start[0..a.length], b.start[0..b.length]);
+}
+fn add_local(self: *Self, name: Token) void {
+    if (self.compiler.local_count == std.math.maxInt(u8)) {
+        self.error_at_current("Too many local vars in function");
+        return;
+    }
+    const local: *Local = &self.compiler.locals[self.compiler.local_count];
+    self.compiler.local_count += 1;
+    local.* = Local{ .name = name, .depth = -1 };
 }
 fn identifier_constant(self: *Self, token: Token) u8 {
     const str = token.start[0..token.length];
@@ -180,12 +243,27 @@ fn variable(self: *Self, can_assign: bool) void {
     self.named_variable(self.parser.previous, can_assign);
 }
 fn named_variable(self: *Self, name: Token, can_assign: bool) void {
-    const arg = self.identifier_constant(name);
+    // const arg = self.identifier_constant(name);
+    var get_op: Op = undefined;
+    var set_op: Op = undefined;
+    var found = true;
+    var arg = self.resolve_local(name) catch blk: {
+        found = false;
+        break :blk 0;
+    };
+    if (found) {
+        get_op = Op.GET_LOCAL;
+        set_op = Op.SET_LOCAL;
+    } else {
+        arg = self.identifier_constant(name);
+        get_op = Op.GET_GLOBAL;
+        set_op = Op.SET_GLOBAL;
+    }
     if (can_assign and self.match(TokenType.EQUAL)) {
         self.expression();
-        self.emit_bytes_val(@intFromEnum(Op.SET_GLOBAL), arg);
+        self.emit_bytes_val(@intFromEnum(set_op), arg);
     } else {
-        self.emit_bytes_val(@intFromEnum(Op.GET_GLOBAL), arg);
+        self.emit_bytes_val(@intFromEnum(get_op), arg);
     }
 }
 fn string(self: *Self, _: bool) void {
@@ -200,6 +278,16 @@ fn literal(self: *Self, _: bool) void {
         .TRUE => self.emit_byte(Op.TRUE),
         .NIL => self.emit_byte(Op.NIL),
         else => unreachable,
+    }
+}
+fn begin_scope(self: *Self) void {
+    self.compiler.scope_depth += 1;
+}
+fn end_scope(self: *Self) void {
+    self.compiler.scope_depth -= 1;
+    while (self.compiler.local_count > 0 and self.compiler.locals[self.compiler.local_count - 1].depth > self.compiler.scope_depth) {
+        self.emit_byte(Op.POP);
+        self.compiler.local_count -= 1;
     }
 }
 fn make_constant(self: *Self, value: Value) u8 {
@@ -267,13 +355,17 @@ fn error_at(self: *Self, token: Token, message: []const u8) void {
     self.parser.had_error = true;
 }
 const Compiler = struct {
-    locals: Local[std.math.maxInt(u8)],
+    locals: [std.math.maxInt(u8)]Local,
     local_count: u8,
     scope_depth: u8,
+    pub fn init() Compiler {
+        const local = [_]Local{.{ .name = undefined, .depth = undefined }} ** std.math.maxInt(u8);
+        return .{ .locals = local, .local_count = 0, .scope_depth = 0 };
+    }
 };
 const Local = struct {
     name: Token,
-    depth: u8,
+    depth: i16,
 };
 const Parser = struct {
     current: Token,

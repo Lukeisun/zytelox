@@ -131,3 +131,19 @@ test "global vars" {
     defer allocator.free(out);
     try std.testing.expectEqualSlices(u8, compare, out);
 }
+test "block" {
+    const allocator = std.testing.allocator;
+    const src =
+        \\{ 
+        \\ var a = 123;
+        \\ print a;
+        \\}
+    ;
+    const compare =
+        \\123
+        \\
+    ;
+    const out = try run_test(allocator, src);
+    defer allocator.free(out);
+    try std.testing.expectEqualSlices(u8, compare, out);
+}

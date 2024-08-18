@@ -163,6 +163,14 @@ pub fn run(self: *Self) !void {
                     return Result.INTERPRET_RUNTIME_ERROR;
                 }
             },
+            .GET_LOCAL => {
+                const slot = self.read_byte();
+                self.push(self.stack[slot]);
+            },
+            .SET_LOCAL => {
+                const slot = self.read_byte();
+                self.stack[slot] = self.peek(0);
+            },
             .NIL => self.push(.{ .nil = {} }),
             .FALSE => self.push(.{ .boolean = false }),
             .TRUE => self.push(.{ .boolean = true }),
