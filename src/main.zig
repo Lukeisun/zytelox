@@ -147,3 +147,34 @@ test "block" {
     defer allocator.free(out);
     try std.testing.expectEqualSlices(u8, compare, out);
 }
+test "if_else" {
+    const allocator = std.testing.allocator;
+    const global_decl = "var a = 7;\n";
+    const t = "if (true) {\n";
+    const body =
+        \\ var x = 13;
+        \\ print x+a;
+        \\} else {
+        \\ var x = 14;
+        \\ print x+a;
+        \\}
+    ;
+    const src_t = global_decl ++ t ++ body;
+    const compare_t =
+        \\20
+        \\
+    ;
+    const out_t = try run_test(allocator, src_t);
+    defer allocator.free(out_t);
+    try std.testing.expectEqualSlices(u8, compare_t, out_t);
+
+    const f = "if (false) {\n";
+    const src_f = global_decl ++ f ++ body;
+    const compare_f =
+        \\21
+        \\
+    ;
+    const out_f = try run_test(allocator, src_f);
+    defer allocator.free(out_f);
+    try std.testing.expectEqualSlices(u8, compare_f, out_f);
+}

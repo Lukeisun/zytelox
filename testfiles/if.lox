@@ -1,0 +1,8 @@
+var a = 7;
+if (false) {
+	var x = 13 + a;
+	print x;
+} else {
+	var x = 14 + a;
+	print x;
+}

@@ -81,9 +81,24 @@ fn statement(self: *Self) void {
         self.begin_scope();
         self.block();
         self.end_scope();
+    } else if (self.match(TokenType.IF)) {
+        self.if_statement();
     } else {
         self.expression_statement();
     }
+}
+fn if_statement(self: *Self) void {
+    self.consume(TokenType.LEFT_PAREN, "Expecting '(' after 'if'.");
+    self.expression();
+    self.consume(TokenType.RIGHT_PAREN, "Expecting ')' after condition.");
+    const then_jump = self.emit_jump(Op.JUMP_IF_FALSE);
+    self.emit_byte(Op.POP);
+    self.statement();
+    const else_jump = self.emit_jump(Op.JUMP);
+    self.patch_jump(then_jump);
+    self.emit_byte(Op.POP);
+    if (self.match(TokenType.ELSE)) self.statement();
+    self.patch_jump(else_jump);
 }
 fn block(self: *Self) void {
     while (!self.check(TokenType.RIGHT_BRACE) and !self.check(TokenType.EOF)) {
@@ -325,6 +340,18 @@ fn emit_byte_val(self: *Self, byte: u8) void {
 }
 fn emit_return(self: *Self) void {
     self.emit_byte(Op.RETURN);
+}
+fn emit_jump(self: *Self, byte: Op) u16 {
+    self.emit_byte(byte);
+    self.emit_byte_val(0xff);
+    self.emit_byte_val(0xff);
+    return @truncate(self.current_chunk().count - 2);
+}
+fn patch_jump(self: *Self, offset: u16) void {
+    const jump = self.current_chunk().count - offset - 2;
+    if (jump > std.math.maxInt(u16)) self.error_at_current("Too much code to jump over");
+    self.current_chunk().code[offset] = @truncate(jump >> 8);
+    self.current_chunk().code[offset + 1] = @truncate(jump);
 }
 fn current_chunk(self: *Self) *Chunk {
     return self.compiling_chunk;

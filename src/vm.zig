@@ -171,6 +171,14 @@ pub fn run(self: *Self) !void {
                 const slot = self.read_byte();
                 self.stack[slot] = self.peek(0);
             },
+            .JUMP_IF_FALSE => {
+                const offset = self.read_short();
+                if (self.falsey(self.peek(0))) self.ip += offset;
+            },
+            .JUMP => {
+                const offset = self.read_short();
+                self.ip += offset;
+            },
             .NIL => self.push(.{ .nil = {} }),
             .FALSE => self.push(.{ .boolean = false }),
             .TRUE => self.push(.{ .boolean = true }),
@@ -239,6 +247,10 @@ fn read_constant_long(self: *Self) Value {
         (@as(u24, self.read_byte()) << 16);
     return self.chunk.constants.values[idx];
 }
+fn read_short(self: *Self) u16 {
+    const val = (@as(u16, self.read_byte()) << 8) | self.read_byte();
+    return val;
+}
 fn binary_op(self: *Self, op: Op) !void {
     const b = self.pop();
     const a = self.pop();
@@ -246,8 +258,6 @@ fn binary_op(self: *Self, op: Op) !void {
         self.runtime_error("Operands must be numbers");
         return Result.INTERPRET_RUNTIME_ERROR;
     }
-    assert(std.meta.activeTag(b) == std.meta.activeTag(a));
-    assert(b == .float);
     switch (op) {
         Op.ADD => self.push(.{ .float = a.float + b.float }),
         Op.SUBTRACT => self.push(.{ .float = a.float - b.float }),
