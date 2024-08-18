@@ -223,6 +223,29 @@ fn grouping(self: *Self, _: bool) void {
     self.expression();
     self.consume(TokenType.RIGHT_PAREN, "Expect ')' after expression");
 }
+fn and_(self: *Self, _: bool) void {
+    const end = self.emit_jump(Op.JUMP_IF_FALSE);
+    self.emit_byte(Op.POP);
+    self.parse_precedence(Precedence.AND);
+    self.patch_jump(end);
+}
+fn or_(self: *Self, _: bool) void {
+    const else_jump = self.emit_jump(Op.JUMP_IF_FALSE);
+    const end = self.emit_jump(Op.JUMP);
+    self.patch_jump(else_jump);
+    self.emit_byte(Op.POP);
+    self.parse_precedence(Precedence.OR);
+    self.patch_jump(end);
+}
+fn number(self: *Self, _: bool) void {
+    const value = std.fmt.parseFloat(f32, self.parser.previous.start[0..self.parser.previous.length]) catch |err| {
+        panic("{s}", .{@errorName(err)});
+    };
+    _ = self.emit_constant(.{ .float = value });
+}
+fn variable(self: *Self, can_assign: bool) void {
+    self.named_variable(self.parser.previous, can_assign);
+}
 fn consume(self: *Self, tag: TokenType, message: []const u8) void {
     if (self.parser.current.tag == tag) {
         self.advance();
@@ -247,15 +270,6 @@ fn advance(self: *Self) void {
         if (self.parser.current.tag != .ERROR) break;
         self.error_at_current(self.parser.current.start[0..self.parser.current.length]);
     }
-}
-fn number(self: *Self, _: bool) void {
-    const value = std.fmt.parseFloat(f32, self.parser.previous.start[0..self.parser.previous.length]) catch |err| {
-        panic("{s}", .{@errorName(err)});
-    };
-    _ = self.emit_constant(.{ .float = value });
-}
-fn variable(self: *Self, can_assign: bool) void {
-    self.named_variable(self.parser.previous, can_assign);
 }
 fn named_variable(self: *Self, name: Token, can_assign: bool) void {
     // const arg = self.identifier_constant(name);
@@ -432,6 +446,8 @@ const rules = blk: {
     r[@intFromEnum(t.LESS)]          = .{ .prefix = null,     .infix = binary,   .precedence = Precedence.COMPARSION };
     r[@intFromEnum(t.STRING)]        = .{ .prefix = string,   .infix = null,     .precedence = Precedence.NONE       };
     r[@intFromEnum(t.IDENTIFIER)]    = .{ .prefix = variable, .infix = null,     .precedence = Precedence.NONE       };
+    r[@intFromEnum(t.AND)]           = .{ .prefix = null,     .infix = and_,     .precedence = Precedence.AND        };
+    r[@intFromEnum(t.OR)]            = .{ .prefix = null,     .infix = or_,     .precedence  = Precedence.OR         };
     // zig fmt: on
     break :blk r;
 };

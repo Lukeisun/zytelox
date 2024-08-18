@@ -1,0 +1,17 @@
+var x = (true == true);
+print x and true;
+if (true or false) {
+	print "Hello!";
+}
+if (false or true) {
+	print "Hello1!";
+}
+if (false or false) {
+	print "Hello2!";
+}
+if (true or true) {
+	print "Hello3!";
+}
+if (false or (true and true)) {
+	print "Hello4!";
+}
