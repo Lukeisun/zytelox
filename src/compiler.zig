@@ -27,7 +27,6 @@ vm: *VM,
 pub fn compile(allocator: Allocator, vm: *VM, source: [:0]const u8, chunk: *Chunk) bool {
     const lexer = Lexer.init(source);
     const compiler = Compiler.init();
-    // TODO: probably need to pass in a parser? or something
     var self = Self{
         .parser = .{
             .current = undefined,
@@ -85,12 +84,20 @@ fn statement(self: *Self) void {
         self.if_statement();
     } else if (self.match(TokenType.WHILE)) {
         self.while_statement();
+    } else if (self.match(TokenType.FOR)) {
+        self.for_statement();
     } else {
         self.expression_statement();
     }
 }
+fn for_statement(self: *Self) void {
+    self.consume(TokenType.LEFT_PAREN, "Expecting '(' after 'for'.");
+    // self.expression();
+    self.consume(TokenType.RIGHT_PAREN, "Expecting ')' after condition.");
+    // const loop_start = self.compiling_chunk.count;
+}
 fn while_statement(self: *Self) void {
-    const loop_start = self.current_chunk().count;
+    const loop_start = self.compiling_chunk.count;
     self.consume(TokenType.LEFT_PAREN, "Expecting '(' after 'while'.");
     self.expression();
     self.consume(TokenType.RIGHT_PAREN, "Expecting ')' after condition.");
@@ -334,7 +341,7 @@ fn end_scope(self: *Self) void {
     }
 }
 fn make_constant(self: *Self, value: Value) u8 {
-    const constant = self.current_chunk().add_constant(value);
+    const constant = self.compiling_chunk.add_constant(value);
     if (constant > std.math.maxInt(u8)) {
         // hmm could just have a DEFINE_GLOBAL_LONG?
         panic("More than 256 constants, not supported yet", .{});
@@ -349,7 +356,7 @@ fn emit_constant(self: *Self, value: Value) Size {
 fn end_compiler(self: *Self) void {
     self.emit_return();
     if (dbg and !self.parser.had_error) {
-        self.current_chunk().disassemble_chunk("code");
+        self.compiling_chunk.disassemble_chunk("code");
     }
 }
 fn emit_bytes(self: *Self, byte1: Op, byte2: Op) void {
@@ -357,21 +364,21 @@ fn emit_bytes(self: *Self, byte1: Op, byte2: Op) void {
     self.emit_byte(byte2);
 }
 fn emit_byte(self: *Self, byte: Op) void {
-    self.current_chunk().write_chunk(@intFromEnum(byte), self.parser.previous.line);
+    self.compiling_chunk.write_chunk(@intFromEnum(byte), self.parser.previous.line);
 }
 fn emit_bytes_val(self: *Self, byte1: u8, byte2: u8) void {
     self.emit_byte_val(byte1);
     self.emit_byte_val(byte2);
 }
 fn emit_byte_val(self: *Self, byte: u8) void {
-    self.current_chunk().write_chunk(byte, self.parser.previous.line);
+    self.compiling_chunk.write_chunk(byte, self.parser.previous.line);
 }
 fn emit_return(self: *Self) void {
     self.emit_byte(Op.RETURN);
 }
 fn emit_loop(self: *Self, count: Size) void {
     self.emit_byte(Op.LOOP);
-    const offset = self.current_chunk().count - count + 2;
+    const offset = self.compiling_chunk.count - count + 2;
     if (offset > std.math.maxInt(u16)) self.error_at_current("Loop too large");
     self.emit_byte_val(@truncate(offset >> 8));
     self.emit_byte_val(@truncate(offset));
@@ -380,13 +387,13 @@ fn emit_jump(self: *Self, byte: Op) u16 {
     self.emit_byte(byte);
     self.emit_byte_val(0xff);
     self.emit_byte_val(0xff);
-    return @truncate(self.current_chunk().count - 2);
+    return @truncate(self.compiling_chunk.count - 2);
 }
 fn patch_jump(self: *Self, offset: u16) void {
-    const jump = self.current_chunk().count - offset - 2;
+    const jump = self.compiling_chunk.count - offset - 2;
     if (jump > std.math.maxInt(u16)) self.error_at_current("Too much code to jump over");
-    self.current_chunk().code[offset] = @truncate(jump >> 8);
-    self.current_chunk().code[offset + 1] = @truncate(jump);
+    self.compiling_chunk.code[offset] = @truncate(jump >> 8);
+    self.compiling_chunk.code[offset + 1] = @truncate(jump);
 }
 fn current_chunk(self: *Self) *Chunk {
     return self.compiling_chunk;

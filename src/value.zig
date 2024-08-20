@@ -11,6 +11,7 @@ pub const Value = union(enum) {
     boolean: bool,
     object: *Object,
     nil,
+    undefined,
     pub fn equals(self: Value, other: Value) bool {
         if (@intFromEnum(self) != @intFromEnum(other)) return false;
         switch (self) {
@@ -23,6 +24,7 @@ pub const Value = union(enum) {
                 }
             },
             .nil => return true,
+            .undefined => unreachable,
         }
     }
 };
@@ -33,6 +35,7 @@ pub fn print_value(value: Value) void {
         .boolean => |b| print("{}", .{b}),
         .object => |o| print("{s}", .{o.to_string()}),
         .nil => {},
+        .undefined => {},
     }
 }
 pub fn print_value_writer(value: Value, writer: std.io.AnyWriter) !void {
@@ -41,6 +44,7 @@ pub fn print_value_writer(value: Value, writer: std.io.AnyWriter) !void {
         .boolean => |b| try writer.print("{}", .{b}),
         .object => |o| try writer.print("{s}", .{o.to_string()}),
         .nil => {},
+        .undefined => {},
     }
 }
 // maybe create an interface with this and chunk ?

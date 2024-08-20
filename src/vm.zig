@@ -65,7 +65,7 @@ fn free_objects(self: *Self) void {
     }
 }
 fn reset_stack(self: *Self) void {
-    self.stack = .{.nil} ** STACK_MAX;
+    self.stack = .{.undefined} ** STACK_MAX;
     self.stack_top = self.stack[0..];
 }
 pub fn push(self: *Self, value: Value) void {
@@ -99,6 +99,7 @@ pub fn run(self: *Self) !void {
             //
             print("DEBUG\n", .{});
             for (self.stack) |value| {
+                if (value == .undefined) continue;
                 print("[ ", .{});
                 print_value(value);
                 print(" ]", .{});
