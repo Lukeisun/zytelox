@@ -110,6 +110,7 @@ pub fn disassemble_instruction(self: *Self, offset: Size) Size {
         .CONSTANT_LONG => |i| return self.constant_long_instruction(@tagName(i), offset),
         .GET_LOCAL, .SET_LOCAL => |i| return self.byte_instruction(@tagName(i), offset),
         .JUMP_IF_FALSE, .JUMP => |i| return self.jump_instruction(@tagName(i), 1, offset),
+        .LOOP => |i| return self.jump_instruction(@tagName(i), -1, offset),
         else => |i| return self.simple_instruction(@tagName(i), offset),
     }
 }
@@ -138,9 +139,15 @@ pub fn constant_long_instruction(self: *Self, tag_name: []const u8, offset: Size
     print("\n", .{});
     return offset + 4;
 }
-pub fn jump_instruction(self: *Self, tag_name: []const u8, sign: u16, offset: Size) Size {
+pub fn jump_instruction(self: *Self, tag_name: []const u8, sign: i2, offset: Size) Size {
     const jump = @as(u16, self.code[offset + 1]) << 8 | self.code[offset + 2];
-    print("{s: <16} {d:>4} -> {d:>4}", .{ tag_name, offset, offset + 3 + sign * jump });
+    // const ip_end: i32 = @intCast(@as(i32, (offset + 3 + sign * jump)));
+    const ip_end: i32 = @as(i32, offset) + 3 + sign * @as(i32, jump);
+    print("{s: <16} {d:>4} -> {d:>4}", .{
+        tag_name,
+        offset,
+        ip_end,
+    });
     print("\n", .{});
     return offset + 4;
 }
@@ -169,6 +176,7 @@ pub const Op = enum(u8) {
     SET_LOCAL,
     JUMP_IF_FALSE,
     JUMP,
+    LOOP,
 };
 
 test "init" {

@@ -83,9 +83,23 @@ fn statement(self: *Self) void {
         self.end_scope();
     } else if (self.match(TokenType.IF)) {
         self.if_statement();
+    } else if (self.match(TokenType.WHILE)) {
+        self.while_statement();
     } else {
         self.expression_statement();
     }
+}
+fn while_statement(self: *Self) void {
+    const loop_start = self.current_chunk().count;
+    self.consume(TokenType.LEFT_PAREN, "Expecting '(' after 'while'.");
+    self.expression();
+    self.consume(TokenType.RIGHT_PAREN, "Expecting ')' after condition.");
+    const exit = self.emit_jump(Op.JUMP_IF_FALSE);
+    self.emit_byte(Op.POP);
+    self.statement();
+    self.emit_loop(loop_start);
+    self.patch_jump(exit);
+    self.emit_byte(Op.POP);
 }
 fn if_statement(self: *Self) void {
     self.consume(TokenType.LEFT_PAREN, "Expecting '(' after 'if'.");
@@ -354,6 +368,13 @@ fn emit_byte_val(self: *Self, byte: u8) void {
 }
 fn emit_return(self: *Self) void {
     self.emit_byte(Op.RETURN);
+}
+fn emit_loop(self: *Self, count: Size) void {
+    self.emit_byte(Op.LOOP);
+    const offset = self.current_chunk().count - count + 2;
+    if (offset > std.math.maxInt(u16)) self.error_at_current("Loop too large");
+    self.emit_byte_val(@truncate(offset >> 8));
+    self.emit_byte_val(@truncate(offset));
 }
 fn emit_jump(self: *Self, byte: Op) u16 {
     self.emit_byte(byte);

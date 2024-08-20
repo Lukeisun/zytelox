@@ -179,6 +179,10 @@ pub fn run(self: *Self) !void {
                 const offset = self.read_short();
                 self.ip += offset;
             },
+            .LOOP => {
+                const offset = self.read_short();
+                self.ip -= offset;
+            },
             .NIL => self.push(.{ .nil = {} }),
             .FALSE => self.push(.{ .boolean = false }),
             .TRUE => self.push(.{ .boolean = true }),
