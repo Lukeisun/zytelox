@@ -91,11 +91,43 @@ fn statement(self: *Self) void {
     }
 }
 fn for_statement(self: *Self) void {
+    self.begin_scope();
     self.consume(TokenType.LEFT_PAREN, "Expecting '(' after 'for'.");
-    // self.expression();
-    self.consume(TokenType.RIGHT_PAREN, "Expecting ')' after condition.");
-    // const loop_start = self.compiling_chunk.count;
+
+    var loop_start = self.compiling_chunk.count;
+    if (self.match(TokenType.SEMICOLON)) {} else if (self.match(TokenType.VAR)) {
+        self.var_declaration();
+    } else {
+        self.expression_statement();
+    }
+    var found = false;
+    var exit: u16 = 0;
+    if (!self.match(TokenType.SEMICOLON)) {
+        found = true;
+        self.expression();
+        self.consume(TokenType.SEMICOLON, "Expecting ';' after loop condition");
+        exit = self.emit_jump(Op.JUMP_IF_FALSE);
+        self.emit_byte(Op.POP);
+    }
+    if (!self.match(TokenType.RIGHT_PAREN)) {
+        const body = self.emit_jump(Op.JUMP);
+        const inc = self.compiling_chunk.count;
+        self.expression();
+        self.emit_byte(Op.POP);
+        self.consume(TokenType.RIGHT_PAREN, "Expecting ')' after for clauses");
+        self.emit_loop(loop_start);
+        loop_start = inc;
+        self.patch_jump(body);
+    }
+    self.statement();
+    self.emit_loop(loop_start);
+    if (found) {
+        self.patch_jump(exit);
+        self.emit_byte(Op.POP);
+    }
+    self.end_scope();
 }
+
 fn while_statement(self: *Self) void {
     const loop_start = self.compiling_chunk.count;
     self.consume(TokenType.LEFT_PAREN, "Expecting '(' after 'while'.");
@@ -394,9 +426,6 @@ fn patch_jump(self: *Self, offset: u16) void {
     if (jump > std.math.maxInt(u16)) self.error_at_current("Too much code to jump over");
     self.compiling_chunk.code[offset] = @truncate(jump >> 8);
     self.compiling_chunk.code[offset + 1] = @truncate(jump);
-}
-fn current_chunk(self: *Self) *Chunk {
-    return self.compiling_chunk;
 }
 fn error_at_current(self: *Self, message: []const u8) void {
     self.error_at(self.parser.previous, message);
