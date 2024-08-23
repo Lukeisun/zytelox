@@ -74,7 +74,7 @@ pub fn push(self: *Self, value: Value) void {
 }
 pub fn pop(self: *Self) Value {
     // TODO: probably remove this? tbh it really only effects debug so maybe only in debug
-    // self.stack_top[0] = .nil;
+    self.stack_top[0] = .undefined;
     self.stack_top -= 1;
     return self.stack_top[0];
 }
@@ -95,22 +95,10 @@ pub fn interpret(self: *Self, allocator: Allocator, source: [:0]const u8) !void 
 
 pub fn run(self: *Self) !void {
     while (true) {
-        if (dbg) {
-            //
-            print("DEBUG\n", .{});
-            for (self.stack) |value| {
-                if (value == .undefined) continue;
-                print("[ ", .{});
-                print_value(value);
-                print(" ]", .{});
-            }
-            print("\n", .{});
-            const offset: u24 = @intCast(self.ip - self.chunk.code.ptr);
-            _ = self.chunk.disassemble_instruction(offset);
-        }
         const instruction: Op = @enumFromInt(self.read_byte());
         switch (instruction) {
             .RETURN => {
+                _ = self.pop();
                 return;
             },
             .CONSTANT => {
@@ -220,6 +208,19 @@ pub fn run(self: *Self) !void {
             },
 
             // else => unreachable,
+        }
+        if (dbg) {
+            //
+            print("DEBUG\n", .{});
+            for (self.stack) |value| {
+                if (value == .undefined) continue;
+                print("[ ", .{});
+                print_value(value);
+                print(" ]", .{});
+            }
+            print("\n", .{});
+            const offset: u24 = @intCast(self.ip - self.chunk.code.ptr);
+            _ = self.chunk.disassemble_instruction(offset);
         }
     }
 }

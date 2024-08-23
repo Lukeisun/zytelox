@@ -93,13 +93,14 @@ fn statement(self: *Self) void {
 fn for_statement(self: *Self) void {
     self.begin_scope();
     self.consume(TokenType.LEFT_PAREN, "Expecting '(' after 'for'.");
-
-    var loop_start = self.compiling_chunk.count;
+    // Initializer
     if (self.match(TokenType.SEMICOLON)) {} else if (self.match(TokenType.VAR)) {
         self.var_declaration();
     } else {
         self.expression_statement();
     }
+    // Cond
+    var loop_start = self.compiling_chunk.count;
     var found = false;
     var exit: u16 = 0;
     if (!self.match(TokenType.SEMICOLON)) {
@@ -109,6 +110,7 @@ fn for_statement(self: *Self) void {
         exit = self.emit_jump(Op.JUMP_IF_FALSE);
         self.emit_byte(Op.POP);
     }
+    // Inc
     if (!self.match(TokenType.RIGHT_PAREN)) {
         const body = self.emit_jump(Op.JUMP);
         const inc = self.compiling_chunk.count;
