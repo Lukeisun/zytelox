@@ -1,5 +1,6 @@
 const std = @import("std");
 const VM = @import("vm.zig");
+const Chunk = @import("chunk.zig");
 const Allocator = std.mem.Allocator;
 const panic = std.debug.panic;
 const print = std.debug.print;
@@ -7,10 +8,16 @@ const oom = @import("memory.zig").oom;
 const Value = @import("value.zig").Value;
 pub const Object = struct {
     const Self = @This();
+    allocator: Allocator,
     next: ?*Self,
     tag: union(Tag) {
         string: *String,
+        function: *Function,
     },
+    const Tag = enum {
+        string,
+        function,
+    };
     pub fn create(allocator: Allocator, vm: *VM, tag_data: anytype) *Object {
         errdefer {
             oom();
@@ -30,12 +37,12 @@ pub const Object = struct {
     pub fn to_string(self: Self) []const u8 {
         switch (self.tag) {
             .string => |s| return s.chars,
+            .function => |f| {
+                const s = std.fmt.allocPrint(self.allocator, "<fn {s}>", .{f.string.chars}) catch oom();
+                return s;
+            },
         }
     }
-
-    const Tag = enum {
-        string,
-    };
 };
 
 pub const String = struct {
@@ -83,6 +90,24 @@ pub const String = struct {
     }
     pub fn destroy(self: *String, allocator: Allocator) void {
         allocator.free(self.chars);
+        allocator.destroy(self);
+    }
+};
+pub const Function = struct {
+    obj: *Object,
+    arity: u8,
+    chunk: Chunk,
+    string: *String,
+    pub fn create(allocator: Allocator, vm: *VM) !*Object {
+        const func_obj = try allocator.create(Function);
+        func_obj = .{ .obj = undefined, .arity = 0, .chunk = Chunk.create(allocator), .string = undefined };
+        const object = Object.create(allocator, vm, .{ .function = func_obj });
+        return object;
+    }
+
+    pub fn destroy(self: *Function, allocator: Allocator) void {
+        self.string.destroy(allocator);
+        self.chunk.free_chunk();
         allocator.destroy(self);
     }
 };

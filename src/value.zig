@@ -21,6 +21,7 @@ pub const Value = union(enum) {
                 if (@intFromEnum(obj.tag) != @intFromEnum(other.object.tag)) return false;
                 switch (obj.tag) {
                     .string => |s| return s == other.object.tag.string,
+                    .function => unreachable,
                 }
             },
             .nil => return true,

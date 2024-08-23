@@ -74,7 +74,7 @@ pub fn push(self: *Self, value: Value) void {
 }
 pub fn pop(self: *Self) Value {
     // TODO: probably remove this? tbh it really only effects debug so maybe only in debug
-    self.stack_top[0] = .nil;
+    // self.stack_top[0] = .nil;
     self.stack_top -= 1;
     return self.stack_top[0];
 }

@@ -256,9 +256,9 @@ fn binary(self: *Self, _: bool) void {
         .SLASH => self.emit_byte(Op.DIVIDE),
         .BANG_EQUAL => self.emit_bytes(Op.EQUAL, Op.NOT),
         .GREATER => self.emit_byte(Op.GREATER),
-        .GREATER_EQUAL => self.emit_bytes(Op.GREATER, Op.NOT),
+        .GREATER_EQUAL => self.emit_bytes(Op.LESS, Op.NOT),
         .LESS => self.emit_byte(Op.LESS),
-        .LESS_EQUAL => self.emit_bytes(Op.LESS, Op.NOT),
+        .LESS_EQUAL => self.emit_bytes(Op.GREATER, Op.NOT),
         .EQUAL_EQUAL => self.emit_byte(Op.EQUAL),
         else => unreachable,
     }

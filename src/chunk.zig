@@ -69,8 +69,6 @@ pub fn free_chunk(self: *Self) void {
     mem.free(self.allocator, self.code);
     mem.free(self.allocator, self.lines);
     self.constants.free_value_array();
-    // TODO: maybe just zero it out manually
-    // self.create(self.allocator);
 }
 fn next_capacity(self: *Self) Size {
     if (self.capacity < 8) {
